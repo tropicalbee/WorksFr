@@ -1,18 +1,17 @@
-"""HTTP submission, persisted reports, SSE replay and downloads."""
+"""HTTP submission, persisted reports and SSE replay."""
 
 import asyncio
 import json
 from collections.abc import AsyncIterator
-from typing import Annotated, Literal
+from typing import Annotated
 from uuid import uuid4
 
 import nbformat
 from fastapi import APIRouter, File, Header, HTTPException, Request, UploadFile
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app import storage
-from app.downloads import notebook_bytes, python_text
 from app.events import StoredEvent
 from app.extract import ExtractionError, check_url
 from app.models import CheckReport, CheckStatus, SourceKind
@@ -168,18 +167,4 @@ async def events(
         stream(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
-@router.get("/checks/{check_id}/download")
-def download(check_id: str, request: Request, format: Literal["ipynb", "py"] = "ipynb") -> Response:
-    report = _report(request, check_id)
-    if report.status == CheckStatus.RUNNING:
-        raise HTTPException(409, "Check is still running")
-    content = notebook_bytes(report) if format == "ipynb" else python_text(report).encode("utf-8")
-    media_type = "application/x-ipynb+json" if format == "ipynb" else "text/x-python"
-    return Response(
-        content,
-        media_type=media_type,
-        headers={"Content-Disposition": f'attachment; filename="worksfr-{check_id}.{format}"'},
     )

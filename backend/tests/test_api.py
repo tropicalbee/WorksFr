@@ -58,7 +58,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
             yield client
 
 
-def test_post_report_replay_log_and_downloads(client: TestClient) -> None:
+def test_post_report_and_replay_log(client: TestClient) -> None:
     response = client.post("/api/checks/notebook", files={"file": ("test.ipynb", notebook())})
     assert response.status_code == 200
     check_id = response.json()["check_id"]
@@ -73,8 +73,6 @@ def test_post_report_replay_log_and_downloads(client: TestClient) -> None:
     assert stream.text.count("\ndata:") == len(log)
     replay = client.get(f"/api/checks/{check_id}/events", headers={"Last-Event-ID": "1"})
     assert "id: 1\n" not in replay.text
-    for format in ("ipynb", "py"):
-        assert client.get(f"/api/checks/{check_id}/download?format={format}").status_code == 200
     assert client.get("/api/checks").json()[0]["steps"] == []
     assert (
         client.post("/api/checks", json={"url": "https://public.test/tutorial"}).status_code == 200
@@ -95,17 +93,21 @@ def test_rejections_and_not_found(client: TestClient) -> None:
         )
     assert client.get("/api/checks/missing").status_code == 404
     assert client.get("/api/checks/missing/events").status_code == 404
-    assert client.get("/api/checks/missing/download?format=py").status_code == 404
+
+
+def test_download_route_is_removed(client: TestClient) -> None:
     create_check(
         client.app.state.settings.database_path,
         CheckReport(
-            id="running",
+            id="removed-download",
             source_kind=SourceKind.URL,
             source="https://public.test",
             status=CheckStatus.RUNNING,
         ),
     )
-    assert client.get("/api/checks/running/download?format=py").status_code == 409
+    assert client.get("/api/checks/removed-download").status_code == 200
+    assert client.get("/api/checks/removed-download/download").status_code == 404
+    assert not any("download" in path for path in client.get("/openapi.json").json()["paths"])
 
 
 def test_sse_completion_during_replay_is_not_lost(
