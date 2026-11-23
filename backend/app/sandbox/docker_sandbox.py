@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 from app.config import Settings
 from app.models import Environment, ExecResult, ProbeResult
+from app.packages import normalize
 from app.sandbox.interface import SandboxError, StepTimeoutError
 
 MAX_REPLY_BYTES = 1024 * 1024
@@ -23,10 +24,6 @@ VERSION_CODE = (
     "if d.metadata['Name']}))"
 )
 Result = TypeVar("Result", ExecResult, ProbeResult)
-
-
-def _normalized_name(name: str) -> str:
-    return re.sub(r"[-_.]+", "-", name).lower()
 
 
 class RunnerProcess(Protocol):
@@ -76,6 +73,8 @@ class DockerSandbox:
         self._packages: list[str] = []
         self._deadline: float | None = None
         self._usable = False
+        self._initial_environment: Environment | None = None
+        self._pinned_restart = False
 
     def _time_left(self, timeout: float) -> float:
         if self._deadline is None:
@@ -95,10 +94,18 @@ class DockerSandbox:
         if result.returncode:
             raise SandboxError(f"{action} failed (exit {result.returncode})")
 
-    def _install(self, name: str, packages: list[str]) -> bool:
+    def _install(self, name: str, packages: list[str], *, pinned: bool = False) -> bool:
         try:
             result = self._commands.run(
-                ["docker", "exec", name, "pip", "install", "--upgrade", *packages],
+                [
+                    "docker",
+                    "exec",
+                    name,
+                    "pip",
+                    "install",
+                    *([] if pinned else ["--upgrade"]),
+                    *packages,
+                ],
                 timeout=self._time_left(300),
             )
         except subprocess.TimeoutExpired:
@@ -149,7 +156,17 @@ class DockerSandbox:
                 ),
                 "Container startup",
             )
-            if valid:
+            baseline = self._initial_environment if self._pinned_restart else None
+            if baseline is not None:
+                pins = [
+                    f"{package}=={version}"
+                    for package, version in baseline.versions.items()
+                    if package not in baseline.failed_packages
+                ]
+                if pins and not self._install(name, pins, pinned=True):
+                    raise SandboxError("environment could not be reproduced: pinned install failed")
+                failed = list(baseline.failed_packages)
+            elif valid:
                 if not self._install(name, valid):
                     for package in valid:
                         if not self._install(name, [package]):
@@ -184,13 +201,24 @@ class DockerSandbox:
             ):
                 raise SandboxError("Runner did not send a valid ready message")
             self._usable = True
-            normalized = {_normalized_name(key): value for key, value in installed.items()}
+            normalized = {normalize(key): value for key, value in installed.items()}
             requested_versions = {
-                package: normalized[_normalized_name(package)]
+                package: normalized[normalize(package)]
                 for package in valid
-                if _normalized_name(package) in normalized
+                if normalize(package) in normalized
             }
-            return Environment(versions=requested_versions, failed_packages=failed)
+            if baseline is not None:
+                if any(
+                    requested_versions.get(key) != value for key, value in baseline.versions.items()
+                ):
+                    raise SandboxError(
+                        "environment could not be reproduced: installed versions differ"
+                    )
+                return baseline.model_copy(deep=True)
+            environment = Environment(versions=requested_versions, failed_packages=failed)
+            if self._initial_environment is None:
+                self._initial_environment = environment.model_copy(deep=True)
+            return environment
         except Exception as exc:
             self.close()
             if isinstance(exc, SandboxError):
@@ -257,7 +285,11 @@ class DockerSandbox:
     def restart(self, replay: list[str]) -> None:
         packages = list(self._packages)
         self.close()
-        self.start(packages)
+        self._pinned_restart = True
+        try:
+            self.start(packages)
+        finally:
+            self._pinned_restart = False
         for index, code in enumerate(replay):
             self.exec(f"replay-{index}", code)
 

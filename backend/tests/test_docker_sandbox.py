@@ -78,7 +78,9 @@ class Commands:
         if args[1:3] == ["network", "disconnect"] and self.disconnect_fails:
             status = 1
         if "pip" in args:
-            packages = tuple(args[args.index("--upgrade") + 1 :])
+            packages = tuple(args[args.index("install") + 1 :])
+            if packages and packages[0] == "--upgrade":
+                packages = packages[1:]
             status = int(packages in self.install_failures)
         if "-c" in args:
             output = '{"pandas":"2.2.3"}'
@@ -202,6 +204,28 @@ def test_context_manager_closes(sandbox: DockerSandbox, commands: Commands) -> N
     with sandbox:
         sandbox.start([])
     assert commands.processes[0].killed
+
+
+def test_restart_installs_pins_and_skips_failed(sandbox: DockerSandbox, commands: Commands) -> None:
+    commands.install_failures = {("pandas", "missing"), ("missing",)}
+    first = sandbox.start(["pandas", "missing"])
+    commands.calls.clear()
+    sandbox.restart([])
+    installs = [args for args in commands.calls if "pip" in args]
+    assert len(installs) == 1
+    assert installs[0][-1] == "pandas==2.2.3"
+    assert "--upgrade" not in installs[0]
+    assert not any("missing" in args for args in commands.calls)
+    assert first.failed_packages == ["missing"]
+    sandbox.close()
+
+
+def test_failed_pin_cleans_up(sandbox: DockerSandbox, commands: Commands) -> None:
+    sandbox.start(["pandas"])
+    commands.install_failures.add(("pandas==2.2.3",))
+    with pytest.raises(SandboxError, match="environment could not be reproduced"):
+        sandbox.restart([])
+    assert commands.calls[-1][1:3] == ["rm", "-f"]
 
 
 def test_versions_only_include_requested_normalized_names(
