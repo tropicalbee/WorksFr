@@ -44,3 +44,6 @@ npm-debug.log*
 .idea/
 .DS_Store
 Thumbs.db
+
+# Playwright MCP logs
+.playwright-mcp/

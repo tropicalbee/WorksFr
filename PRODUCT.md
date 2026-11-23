@@ -51,4 +51,4 @@ The sandbox decides, not the LLM. A step counts as running only after a real run
 
 ## Accessibility & Inclusion
 
-No product-specific requirement established. WCAG AA contrast and keyboard access are the baseline.
+No product-specific requirement established. WCAG AA contrast and keyboard access are the baseline. One exception, chosen by the user on 2026-11-23: the faintest grey (`#62666d`, about 3.3:1) used for line numbers, code comments, the step kind and waiting steps.
