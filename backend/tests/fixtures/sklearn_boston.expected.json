@@ -1,0 +1,54 @@
+{
+  "source_url": "https://datascienceplus.com/linear-regression-from-scratch-in-python/",
+  "format": "html",
+  "title": "Linear Regression from Scratch in Python – DataScience+",
+  "published": "2017-07-10",
+  "steps": [
+    {
+      "kind": "python",
+      "starts_with": "import numpy as np"
+    },
+    {
+      "kind": "python",
+      "starts_with": "# load the boston data set"
+    },
+    {
+      "kind": "python",
+      "starts_with": "print(X.shape)"
+    },
+    {
+      "kind": "python",
+      "starts_with": "feature_names = boston.feature_names"
+    },
+    {
+      "kind": "python",
+      "starts_with": "print(boston.DESCR)"
+    },
+    {
+      "kind": "python",
+      "starts_with": "# create vector of ones..."
+    },
+    {
+      "kind": "python",
+      "starts_with": "# calculate coefficients using closed-form solution"
+    },
+    {
+      "kind": "python",
+      "starts_with": "# extract the feature names of the boston data set and prepend the intercept"
+    },
+    {
+      "kind": "python",
+      "starts_with": "# create a linear model and extract the parameters"
+    },
+    {
+      "kind": "python",
+      "starts_with": "results['coeffs_lm'] = coeffs_lm"
+    }
+  ],
+  "packages": [
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "statsmodels"
+  ]
+}

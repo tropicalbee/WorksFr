@@ -1,0 +1,64 @@
+{
+  "source_url": "https://raw.githubusercontent.com/patmejia/langchain/main/README.md",
+  "format": "github_readme",
+  "title": "LangChain - Comprehensive Guide",
+  "published": null,
+  "steps": [
+    {
+      "kind": "shell",
+      "starts_with": "# Set up project environment"
+    },
+    {
+      "kind": "shell",
+      "starts_with": "# Create and activate a Conda environment"
+    },
+    {
+      "kind": "shell",
+      "starts_with": "# Run OpenAI, LangChain, and Multion scripts"
+    },
+    {
+      "kind": "shell",
+      "starts_with": "cd your_project_directory && \\"
+    },
+    {
+      "kind": "python",
+      "starts_with": "# Import OpenAI from langchain.llms"
+    },
+    {
+      "kind": "shell",
+      "starts_with": "# Run the openai_llm.py script"
+    },
+    {
+      "kind": "shell",
+      "starts_with": "# Install transformers"
+    },
+    {
+      "kind": "python",
+      "starts_with": "# Import PromptTemplate and OpenAI"
+    },
+    {
+      "kind": "python",
+      "starts_with": "# Import ChatOpenAI, ChatPromptTemplate, and HumanMessagePromptTemplate"
+    },
+    {
+      "kind": "python",
+      "starts_with": "# Initialize a second PromptTemplate"
+    },
+    {
+      "kind": "python",
+      "starts_with": "# Import SimpleSequentialChain"
+    },
+    {
+      "kind": "python",
+      "starts_with": "# Import LLMChain, Chain, Dict, and List"
+    },
+    {
+      "kind": "python",
+      "starts_with": "# Initialize two PromptTemplates"
+    }
+  ],
+  "packages": [
+    "langchain",
+    "transformers"
+  ]
+}

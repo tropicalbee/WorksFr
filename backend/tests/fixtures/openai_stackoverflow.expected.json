@@ -1,0 +1,23 @@
+{
+  "source_url": "https://stackoverflow.com/a/77292230",
+  "format": "stackoverflow",
+  "title": "OpenAI API error: \"Module 'openai' has no attribute 'ChatCompletion', did you mean 'Completion'?\"",
+  "published": "2023-10-14",
+  "steps": [
+    {
+      "kind": "shell",
+      "starts_with": "pip install --upgrade openai"
+    },
+    {
+      "kind": "shell",
+      "starts_with": "npm update openai"
+    },
+    {
+      "kind": "python",
+      "starts_with": "import os"
+    }
+  ],
+  "packages": [
+    "openai"
+  ]
+}

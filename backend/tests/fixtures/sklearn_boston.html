@@ -1,0 +1,870 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+	<link rel="shortcut icon" href="https://datascienceplus.com/wp-content/themes/dsplus/favicon.png?v=2">
+	<link rel="apple-touch-icon" href="https://datascienceplus.com/wp-content/themes/dsplus/favicon.png?v=2">
+		<script>
+	(function () {
+		document.documentElement.classList.add('has-js');
+		try {
+			var saved = localStorage.getItem('dsplus-theme');
+			var mode = saved || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+			document.documentElement.setAttribute('data-theme', mode);
+		} catch (e) {}
+	})();
+	</script>
+	<title>Linear Regression from Scratch in Python &#8211; DataScience+</title>
+<meta name='robots' content='max-image-preview:large' />
+
+<!-- DSP SEO -->
+<meta name="description" content="In my last post I demonstrated how to obtain linear regression parameter estimates in R using only matrices and linear algebra. Using the well-known Boston…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Linear Regression from Scratch in Python">
+<meta property="og:description" content="In my last post I demonstrated how to obtain linear regression parameter estimates in R using only matrices and linear algebra. Using the well-known Boston…">
+<meta property="og:url" content="https://datascienceplus.com/linear-regression-from-scratch-in-python/">
+<meta property="og:site_name" content="DataScience+">
+<meta property="og:image" content="https://datascienceplus.com/wp-content/uploads/2017/07/linear-regression-python.png">
+<meta property="fb:app_id" content="872489258915673">
+<meta property="article:published_time" content="2017-07-10T10:18:21+00:00">
+<meta property="article:modified_time" content="2017-07-10T14:02:59+00:00">
+<meta property="article:author" content="Troy Walters">
+<meta property="article:section" content="Regression Models">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Linear Regression from Scratch in Python">
+<meta name="twitter:description" content="In my last post I demonstrated how to obtain linear regression parameter estimates in R using only matrices and linear algebra. Using the well-known Boston…">
+<meta name="twitter:image" content="https://datascienceplus.com/wp-content/uploads/2017/07/linear-regression-python.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://datascienceplus.com/#organization","name":"DataScience+","url":"https://datascienceplus.com/","logo":{"@type":"ImageObject","url":"https://datascienceplus.com/wp-content/uploads/2026/07/cropped-favicon-w.png"}},{"@type":"Article","@id":"https://datascienceplus.com/linear-regression-from-scratch-in-python/#article","headline":"Linear Regression from Scratch in Python","description":"In my last post I demonstrated how to obtain linear regression parameter estimates in R using only matrices and linear algebra. Using the well-known Boston…","datePublished":"2017-07-10T10:18:21+00:00","dateModified":"2017-07-10T14:02:59+00:00","author":{"@type":"Person","name":"Troy Walters","url":"https://datascienceplus.com/author/troywalt/"},"publisher":{"@id":"https://datascienceplus.com/#organization"},"mainEntityOfPage":"https://datascienceplus.com/linear-regression-from-scratch-in-python/","url":"https://datascienceplus.com/linear-regression-from-scratch-in-python/","image":"https://datascienceplus.com/wp-content/uploads/2017/07/linear-regression-python.png","articleSection":"Regression Models"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://datascienceplus.com/"},{"@type":"ListItem","position":2,"name":"Regression Models","item":"https://datascienceplus.com/category/regression-models/"},{"@type":"ListItem","position":3,"name":"Linear Regression from Scratch in Python","item":"https://datascienceplus.com/linear-regression-from-scratch-in-python/"}]}]}</script>
+<!-- /DSP SEO -->
+<script>
+window.dspConsent = (function () {
+	var need = false;
+	var KEY = 'dsp-cookie-consent';
+	var state = 'granted';
+	var items = [];
+	if (need) {
+		try {
+			state = localStorage.getItem(KEY);
+			localStorage.removeItem('dsp-ad-consent'); // the old ad-only answer
+		} catch (e) { state = null; }
+	}
+	return {
+		need: need,
+		state: function () { return state; },
+		whenGranted: function (load, unload) {
+			items.push([load, unload]);
+			if ('granted' === state) { load(); }
+		},
+		set: function (v) {
+			var was = state;
+			state = v;
+			try { localStorage.setItem(KEY, v); } catch (e) {}
+			if (v === was) { return; }
+			items.forEach(function (it) {
+				if ('granted' === v) { it[0](); } else if ('granted' === was && it[1]) { it[1](); }
+			});
+		}
+	};
+})();
+</script>
+		<link rel="alternate" type="application/rss+xml" title="DataScience+ &raquo; Feed" href="https://datascienceplus.com/feed/" />
+<link rel="alternate" type="application/rss+xml" title="DataScience+ &raquo; Comments Feed" href="https://datascienceplus.com/comments/feed/" />
+<link rel="alternate" type="application/rss+xml" title="DataScience+ &raquo; Linear Regression from Scratch in Python Comments Feed" href="https://datascienceplus.com/linear-regression-from-scratch-in-python/feed/" />
+<link rel="alternate" title="oEmbed (JSON)" type="application/json+oembed" href="https://datascienceplus.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Fdatascienceplus.com%2Flinear-regression-from-scratch-in-python%2F" />
+<link rel="alternate" title="oEmbed (XML)" type="text/xml+oembed" href="https://datascienceplus.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Fdatascienceplus.com%2Flinear-regression-from-scratch-in-python%2F&#038;format=xml" />
+<style id="wp-img-auto-sizes-contain-inline-css">
+img:is([sizes=auto i],[sizes^="auto," i]){contain-intrinsic-size:3000px 1500px}
+/*# sourceURL=wp-img-auto-sizes-contain-inline-css */
+</style>
+<style id="wp-block-library-inline-css">
+:root{--wp-block-synced-color:#7a00df;--wp-block-synced-color--rgb:122,0,223;--wp-bound-block-color:var(--wp-block-synced-color);--wp-editor-canvas-background:#ddd;--wp-admin-theme-color:#007cba;--wp-admin-theme-color--rgb:0,124,186;--wp-admin-theme-color-darker-10:#006ba1;--wp-admin-theme-color-darker-10--rgb:0,107,160.5;--wp-admin-theme-color-darker-20:#005a87;--wp-admin-theme-color-darker-20--rgb:0,90,135;--wp-admin-border-width-focus:2px}@media (min-resolution:192dpi){:root{--wp-admin-border-width-focus:1.5px}}.wp-element-button{cursor:pointer}:root .has-very-light-gray-background-color{background-color:#eee}:root .has-very-dark-gray-background-color{background-color:#313131}:root .has-very-light-gray-color{color:#eee}:root .has-very-dark-gray-color{color:#313131}:root .has-vivid-green-cyan-to-vivid-cyan-blue-gradient-background{background:linear-gradient(135deg,#00d084,#0693e3)}:root .has-purple-crush-gradient-background{background:linear-gradient(135deg,#34e2e4,#4721fb 50%,#ab1dfe)}:root .has-hazy-dawn-gradient-background{background:linear-gradient(135deg,#faaca8,#dad0ec)}:root .has-subdued-olive-gradient-background{background:linear-gradient(135deg,#fafae1,#67a671)}:root .has-atomic-cream-gradient-background{background:linear-gradient(135deg,#fdd79a,#004a59)}:root .has-nightshade-gradient-background{background:linear-gradient(135deg,#330968,#31cdcf)}:root .has-midnight-gradient-background{background:linear-gradient(135deg,#020381,#2874fc)}:root{--wp--preset--font-size--normal:16px;--wp--preset--font-size--huge:42px}.has-regular-font-size{font-size:1em}.has-larger-font-size{font-size:2.625em}.has-normal-font-size{font-size:var(--wp--preset--font-size--normal)}.has-huge-font-size{font-size:var(--wp--preset--font-size--huge)}:root .has-text-align-center{text-align:center}:root .has-text-align-left{text-align:left}:root .has-text-align-right{text-align:right}.has-fit-text{white-space:nowrap!important}#end-resizable-editor-section{display:none}.aligncenter{clear:both}.items-justified-left{justify-content:flex-start}.items-justified-center{justify-content:center}.items-justified-right{justify-content:flex-end}.items-justified-space-between{justify-content:space-between}.screen-reader-text{word-wrap:normal!important;border:0;clip-path:inset(50%);height:1px;margin:-1px;overflow:hidden;padding:0;position:absolute;width:1px;word-break:normal!important}.screen-reader-text:focus{background-color:#ddd;clip-path:none;color:#444;display:block;font-size:1em;height:auto;left:5px;line-height:normal;padding:15px 23px 14px;text-decoration:none;top:5px;width:auto;z-index:100000}html :where(.has-border-color){border-style:solid}html :where([style^=border-color],[style*=";border-color"],[style*="; border-color"]){border-style:solid}html :where([style^=border-top-color],[style*=";border-top-color"],[style*="; border-top-color"]){border-top-style:solid}html :where([style^=border-right-color],[style*=";border-right-color"],[style*="; border-right-color"]){border-right-style:solid}html :where([style^=border-bottom-color],[style*=";border-bottom-color"],[style*="; border-bottom-color"]){border-bottom-style:solid}html :where([style^=border-left-color],[style*=";border-left-color"],[style*="; border-left-color"]){border-left-style:solid}html :where([style^=border-width],[style*=";border-width"],[style*="; border-width"]){border-style:solid}html :where([style^=border-top-width],[style*=";border-top-width"],[style*="; border-top-width"]){border-top-style:solid}html :where([style^=border-right-width],[style*=";border-right-width"],[style*="; border-right-width"]){border-right-style:solid}html :where([style^=border-bottom-width],[style*=";border-bottom-width"],[style*="; border-bottom-width"]){border-bottom-style:solid}html :where([style^=border-left-width],[style*=";border-left-width"],[style*="; border-left-width"]){border-left-style:solid}html :where(img[class*=wp-image-]){height:auto;max-width:100%}:where(figure){margin:0 0 1em}html :where(.is-position-sticky){--wp-admin--admin-bar--position-offset:var(--wp-admin--admin-bar--height,0px)}@media screen and (max-width:600px){html :where(.is-position-sticky){--wp-admin--admin-bar--position-offset:0px}}
+
+/*# sourceURL=/wp-includes/css/dist/block-library/common.min.css */
+</style>
+<style id="classic-theme-styles-inline-css">
+/*! This file is auto-generated */
+.wp-block-button__link{color:#fff;background-color:#32373c;border-radius:9999px;box-shadow:none;text-decoration:none;padding:calc(.667em + 2px) calc(1.333em + 2px);font-size:1.125em}.wp-block-file__button{background:#32373c;color:#fff;text-decoration:none}
+/*# sourceURL=/wp-includes/css/classic-themes.min.css */
+</style>
+
+<style id="global-styles-inline-css">
+:root{--wp--preset--aspect-ratio--square: 1;--wp--preset--aspect-ratio--4-3: 4/3;--wp--preset--aspect-ratio--3-4: 3/4;--wp--preset--aspect-ratio--3-2: 3/2;--wp--preset--aspect-ratio--2-3: 2/3;--wp--preset--aspect-ratio--16-9: 16/9;--wp--preset--aspect-ratio--9-16: 9/16;--wp--preset--color--black: #000000;--wp--preset--color--cyan-bluish-gray: #abb8c3;--wp--preset--color--white: #ffffff;--wp--preset--color--pale-pink: #f78da7;--wp--preset--color--vivid-red: #cf2e2e;--wp--preset--color--luminous-vivid-orange: #ff6900;--wp--preset--color--luminous-vivid-amber: #fcb900;--wp--preset--color--light-green-cyan: #7bdcb5;--wp--preset--color--vivid-green-cyan: #00d084;--wp--preset--color--pale-cyan-blue: #8ed1fc;--wp--preset--color--vivid-cyan-blue: #0693e3;--wp--preset--color--vivid-purple: #9b51e0;--wp--preset--gradient--vivid-cyan-blue-to-vivid-purple: linear-gradient(135deg,rgb(6,147,227) 0%,rgb(155,81,224) 100%);--wp--preset--gradient--light-green-cyan-to-vivid-green-cyan: linear-gradient(135deg,rgb(122,220,180) 0%,rgb(0,208,130) 100%);--wp--preset--gradient--luminous-vivid-amber-to-luminous-vivid-orange: linear-gradient(135deg,rgb(252,185,0) 0%,rgb(255,105,0) 100%);--wp--preset--gradient--luminous-vivid-orange-to-vivid-red: linear-gradient(135deg,rgb(255,105,0) 0%,rgb(207,46,46) 100%);--wp--preset--gradient--very-light-gray-to-cyan-bluish-gray: linear-gradient(135deg,rgb(238,238,238) 0%,rgb(169,184,195) 100%);--wp--preset--gradient--cool-to-warm-spectrum: linear-gradient(135deg,rgb(74,234,220) 0%,rgb(151,120,209) 20%,rgb(207,42,186) 40%,rgb(238,44,130) 60%,rgb(251,105,98) 80%,rgb(254,248,76) 100%);--wp--preset--gradient--blush-light-purple: linear-gradient(135deg,rgb(255,206,236) 0%,rgb(152,150,240) 100%);--wp--preset--gradient--blush-bordeaux: linear-gradient(135deg,rgb(254,205,165) 0%,rgb(254,45,45) 50%,rgb(107,0,62) 100%);--wp--preset--gradient--luminous-dusk: linear-gradient(135deg,rgb(255,203,112) 0%,rgb(199,81,192) 50%,rgb(65,88,208) 100%);--wp--preset--gradient--pale-ocean: linear-gradient(135deg,rgb(255,245,203) 0%,rgb(182,227,212) 50%,rgb(51,167,181) 100%);--wp--preset--gradient--electric-grass: linear-gradient(135deg,rgb(202,248,128) 0%,rgb(113,206,126) 100%);--wp--preset--gradient--midnight: linear-gradient(135deg,rgb(2,3,129) 0%,rgb(40,116,252) 100%);--wp--preset--font-size--small: 13px;--wp--preset--font-size--medium: 20px;--wp--preset--font-size--large: 36px;--wp--preset--font-size--x-large: 42px;--wp--preset--spacing--20: 0.44rem;--wp--preset--spacing--30: 0.67rem;--wp--preset--spacing--40: 1rem;--wp--preset--spacing--50: 1.5rem;--wp--preset--spacing--60: 2.25rem;--wp--preset--spacing--70: 3.38rem;--wp--preset--spacing--80: 5.06rem;--wp--preset--shadow--natural: 6px 6px 9px rgba(0, 0, 0, 0.2);--wp--preset--shadow--deep: 12px 12px 50px rgba(0, 0, 0, 0.4);--wp--preset--shadow--sharp: 6px 6px 0px rgba(0, 0, 0, 0.2);--wp--preset--shadow--outlined: 6px 6px 0px -3px rgb(255, 255, 255), 6px 6px rgb(0, 0, 0);--wp--preset--shadow--crisp: 6px 6px 0px rgb(0, 0, 0);}.wp-block-button{--wp--preset--dimension--25: 25%;--wp--preset--dimension--50: 50%;--wp--preset--dimension--75: 75%;--wp--preset--dimension--100: 100%;}:where(body) { margin: 0; }:where(.is-layout-flex){gap: 0.5em;}:where(.is-layout-grid){gap: 0.5em;}body .is-layout-flex{display: flex;}.is-layout-flex{flex-wrap: wrap;align-items: center;}.is-layout-flex > :is(*, div){margin: 0;}body .is-layout-grid{display: grid;}.is-layout-grid > :is(*, div){margin: 0;}body{padding-top: 0px;padding-right: 0px;padding-bottom: 0px;padding-left: 0px;}:root :where(.wp-element-button, .wp-block-button__link){background-color: #32373c;border-width: 0;color: #fff;font-family: inherit;font-size: inherit;font-style: inherit;font-weight: inherit;letter-spacing: inherit;line-height: inherit;padding-top: calc(0.667em + 2px);padding-right: calc(1.333em + 2px);padding-bottom: calc(0.667em + 2px);padding-left: calc(1.333em + 2px);text-decoration: none;text-transform: inherit;}.has-black-color{color: var(--wp--preset--color--black) !important;}.has-cyan-bluish-gray-color{color: var(--wp--preset--color--cyan-bluish-gray) !important;}.has-white-color{color: var(--wp--preset--color--white) !important;}.has-pale-pink-color{color: var(--wp--preset--color--pale-pink) !important;}.has-vivid-red-color{color: var(--wp--preset--color--vivid-red) !important;}.has-luminous-vivid-orange-color{color: var(--wp--preset--color--luminous-vivid-orange) !important;}.has-luminous-vivid-amber-color{color: var(--wp--preset--color--luminous-vivid-amber) !important;}.has-light-green-cyan-color{color: var(--wp--preset--color--light-green-cyan) !important;}.has-vivid-green-cyan-color{color: var(--wp--preset--color--vivid-green-cyan) !important;}.has-pale-cyan-blue-color{color: var(--wp--preset--color--pale-cyan-blue) !important;}.has-vivid-cyan-blue-color{color: var(--wp--preset--color--vivid-cyan-blue) !important;}.has-vivid-purple-color{color: var(--wp--preset--color--vivid-purple) !important;}.has-black-background-color{background-color: var(--wp--preset--color--black) !important;}.has-cyan-bluish-gray-background-color{background-color: var(--wp--preset--color--cyan-bluish-gray) !important;}.has-white-background-color{background-color: var(--wp--preset--color--white) !important;}.has-pale-pink-background-color{background-color: var(--wp--preset--color--pale-pink) !important;}.has-vivid-red-background-color{background-color: var(--wp--preset--color--vivid-red) !important;}.has-luminous-vivid-orange-background-color{background-color: var(--wp--preset--color--luminous-vivid-orange) !important;}.has-luminous-vivid-amber-background-color{background-color: var(--wp--preset--color--luminous-vivid-amber) !important;}.has-light-green-cyan-background-color{background-color: var(--wp--preset--color--light-green-cyan) !important;}.has-vivid-green-cyan-background-color{background-color: var(--wp--preset--color--vivid-green-cyan) !important;}.has-pale-cyan-blue-background-color{background-color: var(--wp--preset--color--pale-cyan-blue) !important;}.has-vivid-cyan-blue-background-color{background-color: var(--wp--preset--color--vivid-cyan-blue) !important;}.has-vivid-purple-background-color{background-color: var(--wp--preset--color--vivid-purple) !important;}.has-black-border-color{border-color: var(--wp--preset--color--black) !important;}.has-cyan-bluish-gray-border-color{border-color: var(--wp--preset--color--cyan-bluish-gray) !important;}.has-white-border-color{border-color: var(--wp--preset--color--white) !important;}.has-pale-pink-border-color{border-color: var(--wp--preset--color--pale-pink) !important;}.has-vivid-red-border-color{border-color: var(--wp--preset--color--vivid-red) !important;}.has-luminous-vivid-orange-border-color{border-color: var(--wp--preset--color--luminous-vivid-orange) !important;}.has-luminous-vivid-amber-border-color{border-color: var(--wp--preset--color--luminous-vivid-amber) !important;}.has-light-green-cyan-border-color{border-color: var(--wp--preset--color--light-green-cyan) !important;}.has-vivid-green-cyan-border-color{border-color: var(--wp--preset--color--vivid-green-cyan) !important;}.has-pale-cyan-blue-border-color{border-color: var(--wp--preset--color--pale-cyan-blue) !important;}.has-vivid-cyan-blue-border-color{border-color: var(--wp--preset--color--vivid-cyan-blue) !important;}.has-vivid-purple-border-color{border-color: var(--wp--preset--color--vivid-purple) !important;}.has-vivid-cyan-blue-to-vivid-purple-gradient-background{background: var(--wp--preset--gradient--vivid-cyan-blue-to-vivid-purple) !important;}.has-light-green-cyan-to-vivid-green-cyan-gradient-background{background: var(--wp--preset--gradient--light-green-cyan-to-vivid-green-cyan) !important;}.has-luminous-vivid-amber-to-luminous-vivid-orange-gradient-background{background: var(--wp--preset--gradient--luminous-vivid-amber-to-luminous-vivid-orange) !important;}.has-luminous-vivid-orange-to-vivid-red-gradient-background{background: var(--wp--preset--gradient--luminous-vivid-orange-to-vivid-red) !important;}.has-very-light-gray-to-cyan-bluish-gray-gradient-background{background: var(--wp--preset--gradient--very-light-gray-to-cyan-bluish-gray) !important;}.has-cool-to-warm-spectrum-gradient-background{background: var(--wp--preset--gradient--cool-to-warm-spectrum) !important;}.has-blush-light-purple-gradient-background{background: var(--wp--preset--gradient--blush-light-purple) !important;}.has-blush-bordeaux-gradient-background{background: var(--wp--preset--gradient--blush-bordeaux) !important;}.has-luminous-dusk-gradient-background{background: var(--wp--preset--gradient--luminous-dusk) !important;}.has-pale-ocean-gradient-background{background: var(--wp--preset--gradient--pale-ocean) !important;}.has-electric-grass-gradient-background{background: var(--wp--preset--gradient--electric-grass) !important;}.has-midnight-gradient-background{background: var(--wp--preset--gradient--midnight) !important;}.has-small-font-size{font-size: var(--wp--preset--font-size--small) !important;}.has-medium-font-size{font-size: var(--wp--preset--font-size--medium) !important;}.has-large-font-size{font-size: var(--wp--preset--font-size--large) !important;}.has-x-large-font-size{font-size: var(--wp--preset--font-size--x-large) !important;}
+/*# sourceURL=global-styles-inline-css */
+</style>
+
+<link rel='stylesheet' id='dsplus-css' href='https://datascienceplus.com/wp-content/themes/dsplus/style.css?ver=1794860279' media='all' />
+<link rel="canonical" href="https://datascienceplus.com/linear-regression-from-scratch-in-python/" />
+<link rel="icon" href="https://datascienceplus.com/wp-content/uploads/2026/07/cropped-favicon-w-32x32.png" sizes="32x32" />
+<link rel="icon" href="https://datascienceplus.com/wp-content/uploads/2026/07/cropped-favicon-w-192x192.png" sizes="192x192" />
+<link rel="apple-touch-icon" href="https://datascienceplus.com/wp-content/uploads/2026/07/cropped-favicon-w-180x180.png" />
+<meta name="msapplication-TileImage" content="https://datascienceplus.com/wp-content/uploads/2026/07/cropped-favicon-w-270x270.png" />
+</head>
+<body class="wp-singular post-template-default single single-post postid-7463 single-format-standard wp-theme-dsplus">
+
+<a class="skip-link" href="#content">Skip to content</a>
+
+<header class="nav">
+	<div class="nav-inner">
+		<div class="nav-left">
+			<a class="brand" href="https://datascienceplus.com/">data<b>science+</b></a>
+			<span class="nav-sep" aria-hidden="true">/</span>
+			<nav class="acct" aria-label="Account">
+									<a href="https://datascienceplus.com/login/">Log in</a>
+					<span class="acct-sep" aria-hidden="true">&middot;</span>
+					<a href="https://datascienceplus.com/register/">Register</a>
+							</nav>
+		</div>
+
+		<div class="nav-actions">
+			<form class="navsearch" role="search" method="get" action="https://datascienceplus.com/">
+				<button class="navsearch-toggle" type="button" aria-label="Search">
+					<svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+						<circle cx="11" cy="11" r="7"></circle><line x1="20" y1="20" x2="16.65" y2="16.65"></line>
+					</svg>
+				</button>
+				<input type="search" name="s" value="" placeholder="Search" aria-label="Search articles">
+				<button class="navsearch-close" type="button" tabindex="-1" aria-label="Close search">&times;</button>
+			</form>
+			<button class="navicon" id="dsplus-theme-toggle" type="button" title="Toggle theme" aria-label="Toggle theme">&#9680;</button>
+		</div>
+	</div>
+</header>
+
+<main id="content" class="site-main">
+
+	<div class="shell">
+		<article class="article">
+						<nav class="breadcrumb" aria-label="Breadcrumb">
+				<a href="https://datascienceplus.com/">Home</a>
+				<svg class="sep" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>				<a href="https://datascienceplus.com/?lang=python#browse">Python</a>
+									<svg class="sep" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>					<a href="https://datascienceplus.com/category/regression-models/?lang=python">Regression Models</a>
+							</nav>
+
+			<h1>Linear Regression from Scratch in Python</h1>
+
+			<div class="postmeta pm-nocomm">
+				<span class="pm-info">
+				<span class="pm-by"><span class="av"><span class="ini">TW</span><img class="grav" src="https://secure.gravatar.com/avatar/79c2302a43dd6df68b3dc475326c1203f40676861a9e85fd06e69636f8e64186?s=40&#038;d=404&#038;r=g" alt="" loading="lazy" width="20" height="20" onerror="this.remove()"></span> <a href="https://datascienceplus.com/author/troywalt/">Troy Walters</a> ·</span>
+				July 10, 2017				<span class="pm-read">·
+				5 min read</span>
+									<span class="pm-views">· <b>26.6K</b> views</span>
+													<span class="pm-comm">· <a href="#comments"><b>1</b> comment</a></span>
+								</span>
+				<span class="share-row">
+					<span class="share-lbl">Share:</span>
+										<a class="s-ic" href="https://x.com/intent/post?url=https%3A%2F%2Fdatascienceplus.com%2Flinear-regression-from-scratch-in-python%2F&amp;text=Linear%20Regression%20from%20Scratch%20in%20Python%20%23python" target="_blank" rel="noopener nofollow" aria-label="Share on X">
+						<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M18.9 1.15h3.68l-8.04 9.19L24 22.85h-7.41l-5.8-7.58-6.64 7.58H.47l8.6-9.83L0 1.15h7.59l5.24 6.93zm-1.29 19.5h2.04L6.49 3.24H4.3z"/></svg>
+					</a>
+					<a class="s-ic" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fdatascienceplus.com%2Flinear-regression-from-scratch-in-python%2F" target="_blank" rel="noopener nofollow" aria-label="Share on LinkedIn">
+						<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.86 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56zM22.22 0H1.77C.79 0 0 .77 0 1.72v20.55C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.72C24 .77 23.2 0 22.22 0z"/></svg>
+					</a>
+					<a class="s-ic" href="https://bsky.app/intent/compose?text=Linear%20Regression%20from%20Scratch%20in%20Python%20%23python%20https%3A%2F%2Fdatascienceplus.com%2Flinear-regression-from-scratch-in-python%2F" target="_blank" rel="noopener nofollow" aria-label="Share on Bluesky">
+						<svg viewBox="0 0 600 530" width="15" height="13" fill="currentColor" aria-hidden="true"><path d="M135.72 44.03C202.22 93.95 273.74 195.17 300 249.49c26.26-54.32 97.78-155.54 164.28-205.46C512.26 8.01 590-19.86 590 68.82c0 17.71-10.16 148.79-16.11 170.07-20.7 73.98-96.14 92.85-163.25 81.43 117.3 19.96 147.14 86.09 82.7 152.22-122.39 125.59-175.91-31.51-189.63-71.77-2.51-7.38-3.69-10.83-3.71-7.9-.02-2.93-1.2.52-3.71 7.9-13.71 40.26-67.24 197.36-189.63 71.77-64.44-66.13-34.6-132.26 82.7-152.22-67.11 11.42-142.55-7.45-163.25-81.43C20.15 217.61 10 86.53 10 68.82c0-88.68 77.74-60.81 125.72-24.79z"/></svg>
+					</a>
+				</span>
+			</div>
+
+			
+			<div class="entry-content">
+				<p>In my <a href="https://datascienceplus.com/linear-regression-from-scratch-in-r/" target="_blank">last post</a> I demonstrated how to obtain linear regression parameter estimates in R using only matrices and linear algebra. Using the well-known Boston data set of housing characteristics, I calculated ordinary least-squares parameter estimates using the closed-form solution. In this post I&#8217;ll explore how to do the same thing in Python using <code>numpy</code> arrays and then compare our estimates to those obtained using the <code>linear_model</code>  function from the <code>statsmodels</code> package.</p>
+<p>First, let&#8217;s import the modules and functions we&#8217;ll need. We&#8217;ll use <code>numpy</code> for matrix and linear algebra. In the last post, we obtained the Boston housing data set from R&#8217;s <code>MASS</code> library. In Python, we can find the same data set in the <code>scikit-learn</code> module.</p>
+<pre>
+import numpy as np
+import pandas as pd
+from numpy.linalg import inv
+from sklearn.datasets import load_boston
+from statsmodels.regression.linear_model import OLS
+</pre>
+<p>Next, we can load the Boston data using the <code>load_boston</code> function. For those who aren’t familiar with it, the Boston data set contains 14 economic, geographic, and demographic variables for 506 tracts in the city of Boston from the early 1990s as well as the median home price in each of the tracts.</p>
+<p>Now we&#8217;re ready to start. Recall from my previous post that linear regression typically takes the form:<br />
+$$y=\beta X + \epsilon$$<br />
+where ‘y’ is a vector of the response variable, ‘X’ is the matrix of our feature variables (sometimes called the ‘design’ matrix), and β is a vector of parameters that we want to estimate. \(\epsilon\) is the error term; it represents features that affect the response, but are not explicitly included in our model.</p>
+<p>From the <code>boston</code> object, we will extract the features, which are conveniently already a numpy array, and assign it to <code>X</code>.  Our target variable is the median home value (in thousands of US dollars) for each tract. We assign the target to the variable <code>y</code>.</p>
+<pre>
+# load the boston data set
+boston = load_boston()
+
+# obtain the feature matrix as a numpy array
+X = boston.data
+
+# obtain the target variable as a numpy array
+y = boston.target
+</pre>
+<p>If we examine the features, we can see that <code>X</code> is the expected shape.</p>
+<pre>
+print(X.shape)
+<em>(506, 14)
+</em>
+</pre>
+<p>We can also look at the feature names.</p>
+<pre>
+feature_names = boston.feature_names
+print(feature_names)
+<em>['CRIM' 'ZN' 'INDUS' 'CHAS' 'NOX' 'RM' 'AGE' 'DIS' 'RAD' 'TAX' 'PTRATIO'
+ 'B' 'LSTAT']
+</em>
+</pre>
+<p>If you would like to see more details about these features and the data set, you can view the DESCR attribute of the <code>boston</code> object.</p>
+<pre>
+print(boston.DESCR)
+</pre>
+<p>We will need to add a vector of ones to our feature matrix for the intercept term. We can do this easily in <code>numpy</code> and then add it as the first column in our feature matrix.</p>
+<pre>
+# create vector of ones...
+int = np.ones(shape=y.shape)[..., None]
+
+#...and add to feature matrix
+X = np.concatenate((int, X), 1)
+</pre>
+<p>With the preparatory work out of the way, we can now implement the closed-form solution to obtain OLS parameter estimates.<br />
+$$\beta = (X^TX)^{-1}X^Ty$$<br />
+We do this in python using the numpy arrays we just created, the <code>inv()</code> function, and the <code>transpose()</code> and <code>dot()</code>  methods.</p>
+<pre>
+# calculate coefficients using closed-form solution
+coeffs = inv(X.transpose().dot(X)).dot(X.transpose()).dot(y)
+</pre>
+<p>Let&#8217;s examine them to see if they make sense. Here I convert the <code>coeffs</code> array to a <code>pandas</code> DataFrame and add the feature names as an index.</p>
+<pre>
+# extract the feature names of the boston data set and prepend the intercept
+feature_names = np.insert(boston.feature_names, 0, 'INT')
+
+# collect results into a DataFrame for pretty printing
+results = pd.DataFrame({'coeffs':coeffs}, index=feature_names)
+
+print(results.round(2))
+<em>         coeffs
+INT       36.49
+CRIM      -0.11
+ZN         0.05
+INDUS      0.02
+CHAS       2.69
+NOX      -17.80
+RM         3.80
+AGE        0.00
+DIS       -1.48
+RAD        0.31
+TAX       -0.01
+PTRATIO   -0.95
+</em>
+</pre>
+<p>Now we have our parameter vector β. These are the linear relationships between the median home value and each of the features. For example, we see that an increase of one unit in the number of rooms (RM) is associated with a $3,810 increase in home value. We can find the relationship between the response and any of the feature variables in the same manner, paying careful attention to the units in the data description. Notice that one of our features, &#8216;CHAS&#8217;, is a dummy variable which takes a value of 0 or 1 depending on whether or not the tract is adjacent to the Charles River. The coefficient of &#8216;CHAS&#8217; tells us that homes in tracts adjacent to the Charles River (coded as 1) have a median price that is $2,690 higher than homes in tracts that do not border the river (coded as 0) when the other variables are held constant.</p>
+<p>Now we&#8217;ll estimate the same model using the <code>linear_model</code> function from <code>statsmodels</code> and assign the results to <code>coeffs_lm</code>.</p>
+<pre>
+# create a linear model and extract the parameters
+coeffs_lm = OLS(y, X).fit().params
+</pre>
+<p>Last of all, we place our newly-estimated parameters next to our original ones in the <code>results</code> DataFrame and compare.</p>
+<pre>
+results['coeffs_lm'] = coeffs_lm
+
+print(results.round(2))
+<em>         coeffs  coeffs_lm
+INT       36.49      36.49
+CRIM      -0.11      -0.11
+ZN         0.05       0.05
+INDUS      0.02       0.02
+CHAS       2.69       2.69
+NOX      -17.80     -17.80
+RM         3.80       3.80
+AGE        0.00       0.00
+DIS       -1.48      -1.48
+RAD        0.31       0.31
+TAX       -0.01      -0.01
+PTRATIO   -0.95      -0.95
+B          0.01       0.01
+LSTAT     -0.53      -0.53
+</em>
+</pre>
+<p>Once again, our results are identical. Now you know how these estimates are obtained using the closed-form solution. Like I mentioned in my R post on the same topic, you’d never actually implement linear regression in this way. You would use the <code>linear_model</code> function or the <code>LinearRegression</code> function from the <code>scikit-learn</code> package if you&#8217;d prefer to approach linear regression from a machine learning standpoint. These functions are very quick, require, very little code, and provides us with a number of diagnostic statistics, including , t-statistics, and p-values.</p>
+<p>I have made the code from this post available at my Github <a href="https://github.com/capt-calculator/linear_regression_from_scratch_py" target="_blank">here</a>.</p>
+			</div>
+
+										<div class="tags">
+											<a href="https://datascienceplus.com/tag/linear-regression/">#linear regression</a>
+									</div>
+			
+			<div class="share-end">
+				<a class="share-pill x" href="https://x.com/intent/post?url=https%3A%2F%2Fdatascienceplus.com%2Flinear-regression-from-scratch-in-python%2F&amp;text=Linear%20Regression%20from%20Scratch%20in%20Python%20%23python" target="_blank" rel="noopener nofollow">
+					<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M18.9 1.15h3.68l-8.04 9.19L24 22.85h-7.41l-5.8-7.58-6.64 7.58H.47l8.6-9.83L0 1.15h7.59l5.24 6.93zm-1.29 19.5h2.04L6.49 3.24H4.3z"/></svg>
+					Post on X				</a>
+				<a class="share-pill li" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fdatascienceplus.com%2Flinear-regression-from-scratch-in-python%2F" target="_blank" rel="noopener nofollow">
+					<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.86 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56zM22.22 0H1.77C.79 0 0 .77 0 1.72v20.55C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.72C24 .77 23.2 0 22.22 0z"/></svg>
+					Share on LinkedIn				</a>
+				<a class="share-pill bs" href="https://bsky.app/intent/compose?text=Linear%20Regression%20from%20Scratch%20in%20Python%20%23python%20https%3A%2F%2Fdatascienceplus.com%2Flinear-regression-from-scratch-in-python%2F" target="_blank" rel="noopener nofollow">
+					<svg viewBox="0 0 600 530" width="15" height="13" fill="currentColor" aria-hidden="true"><path d="M135.72 44.03C202.22 93.95 273.74 195.17 300 249.49c26.26-54.32 97.78-155.54 164.28-205.46C512.26 8.01 590-19.86 590 68.82c0 17.71-10.16 148.79-16.11 170.07-20.7 73.98-96.14 92.85-163.25 81.43 117.3 19.96 147.14 86.09 82.7 152.22-122.39 125.59-175.91-31.51-189.63-71.77-2.51-7.38-3.69-10.83-3.71-7.9-.02-2.93-1.2.52-3.71 7.9-13.71 40.26-67.24 197.36-189.63 71.77-64.44-66.13-34.6-132.26 82.7-152.22-67.11 11.42-142.55-7.45-163.25-81.43C20.15 217.61 10 86.53 10 68.82c0-88.68 77.74-60.81 125.72-24.79z"/></svg>
+					Share on Bluesky				</a>
+			</div>
+
+			<div class="dsp-carbon dsp-carbon-inline"></div>		</article>
+
+		<aside class="rail right">
+			<div class="dsp-carbon dsp-carbon-rail"></div>		</aside>
+	</div>
+
+			<section class="comments-band">
+			<div class="comments-inner">
+				
+<section class="comments" id="comments">
+
+			<h2 class="comments-title">
+			1 Comment		</h2>
+
+		<ol class="commentlist">
+				<li class="comment even thread-even depth-1" id="comment-1575">
+		<div class="comment-inner">
+			<span class="c-av"><span class="ini">NN</span><img class="grav" src="https://secure.gravatar.com/avatar/aac036c05328451ee1cb9379c1c2fc7ce26f7e5885a122f470f255ddfcee3a69?s=80&#038;d=404&#038;r=g" alt="" loading="lazy" width="40" height="40" onerror="this.remove()"></span>			<div class="c-body">
+				<div class="c-head">
+					<span class="c-name">Nandini Nuthalapati</span>
+					<span class="c-date">February 12, 2018</span>
+				</div>
+								<p>Great explanation. Here, the data doesn&#8217;t have any variable with more than one category. But what if it has? Do we need to include all the dummy variables in X or all but 1?</p>
+				<span class="c-reply">
+					<a rel="nofollow" class="comment-reply-link" href="https://datascienceplus.com/linear-regression-from-scratch-in-python/?replytocom=1575#respond" data-commentid="1575" data-postid="7463" data-belowelement="comment-1575" data-respondelement="respond" data-replyto="Reply to Nandini Nuthalapati" aria-label="Reply to Nandini Nuthalapati">Reply</a>				</span>
+			</div>
+		</div>
+	</li><!-- #comment-## -->
+		</ol>
+
+			
+	
+		<div id="respond" class="respond">
+		<h3 id="reply-title" class="comment-reply-title">Leave a comment <small><a rel="nofollow" id="cancel-comment-reply-link" href="/linear-regression-from-scratch-in-python/#respond" style="display:none;">Cancel reply</a></small></h3><form action="https://datascienceplus.com/wp-comments-post.php" method="post" id="commentform" class="comment-form"><p class="comment-form-comment"><label for="comment">Comment <span class="required">*</span></label> <textarea id="comment" name="comment" cols="45" rows="8" maxlength="65525" required></textarea></p><p class="comment-form-author"><label for="author">Name <span class="required">*</span></label> <input id="author" name="author" type="text" value="" size="30" maxlength="245" autocomplete="name" required /></p>
+<p class="comment-form-email"><label for="email">Email <span class="required">*</span></label> <input id="email" name="email" type="email" value="" size="30" maxlength="100" autocomplete="email" required /></p>
+<p class="form-submit"><input name="submit" type="submit" id="submit" class="submit" value="Post comment" /> <input type='hidden' name='comment_post_ID' value='7463' id='comment_post_ID' />
+<input type='hidden' name='comment_parent' id='comment_parent' value='0' />
+</p><p style="display: none;"><input type="hidden" id="akismet_comment_nonce" name="akismet_comment_nonce" value="47cf46b0b7" /></p><p style="display: none !important;" class="akismet-fields-container" data-prefix="ak_"><label>&#916;<textarea name="ak_hp_textarea" cols="45" rows="8" maxlength="100"></textarea></label><input type="hidden" id="ak_js_1" name="ak_js" value="186"/><script>
+document.getElementById( "ak_js_1" ).setAttribute( "value", ( new Date() ).getTime() );
+</script>
+</p></form>	</div><!-- #respond -->
+	<p class="akismet_comment_form_privacy_notice">This site uses Akismet to reduce spam. <a href="https://akismet.com/privacy/" target="_blank" rel="nofollow noopener">Learn how your comment data is processed.</a></p></section>
+			</div>
+		</section>
+					<section class="related">
+				<div class="related-inner">
+											<p class="pref-source">
+		Read here often?		<a href="https://www.google.com/preferences/source?q=datascienceplus.com" target="_blank" rel="nofollow noopener">Set us as a preferred source on Google <span aria-hidden="true">&rarr;</span></a>
+	</p>
+						<h2>More in Regression Models</h2>
+					<div class="rel-grid">
+							<article class="card">
+		<div class="kick">
+							<a href="https://datascienceplus.com/category/regression-models/">Regression Models</a>
+						<span class="yr">July 31, 2026</span>
+		</div>
+		<h3><a href="https://datascienceplus.com/how-to-import-nhanes-data-and-run-a-linear-and-logistic-regression-in-python-and-r/">How to import NHANES data and run a linear and logistic regression, in Python and R</a></h3>
+		<div class="who">
+			<span class="av"><span class="ini">KD</span><img class="grav" src="https://secure.gravatar.com/avatar/c446469f2caf1f0046b46bace33b52bd95a534ab5ea33f4a90e52eaf404705ec?s=48&#038;d=404&#038;r=g" alt="" loading="lazy" width="24" height="24" onerror="this.remove()"></span>			<span class="name">
+									<a href="https://datascienceplus.com/author/dsp1/">Klodian Dhana</a>
+							</span>
+							<span class="lang">Python</span>
+					</div>
+	</article>
+		<article class="card">
+		<div class="kick">
+							<a href="https://datascienceplus.com/category/regression-models/">Regression Models</a>
+						<span class="yr">March 17, 2022</span>
+		</div>
+		<h3><a href="https://datascienceplus.com/how-to-incorporate-ml-net-with-algorithmic-trading/">How to Incorporate ML.Net With Algorithmic Trading</a></h3>
+		<div class="who">
+			<span class="av"><span class="ini">ZP</span><img class="grav" src="https://secure.gravatar.com/avatar/c76b04cbf73c83a4eb3cdcf28394784d6aebf980786624932fbad84147c21195?s=48&#038;d=404&#038;r=g" alt="" loading="lazy" width="24" height="24" onerror="this.remove()"></span>			<span class="name">
+									<a href="https://datascienceplus.com/author/zadhid-powell/">Zadhid Powell</a>
+							</span>
+							<span class="lang">Python</span>
+					</div>
+	</article>
+		<article class="card">
+		<div class="kick">
+							<a href="https://datascienceplus.com/category/regression-models/">Regression Models</a>
+						<span class="yr">September 25, 2019</span>
+		</div>
+		<h3><a href="https://datascienceplus.com/linear-regression-using-python-basics-2/">Linear Regression using Python (Basics &#8211; 2)</a></h3>
+		<div class="who">
+			<span class="av"><span class="ini">AK</span><img class="grav" src="https://secure.gravatar.com/avatar/e0e591fe3fb2c26e4be566f48740098cc79f402e2fa4df4db6cca8db6793e597?s=48&#038;d=404&#038;r=g" alt="" loading="lazy" width="24" height="24" onerror="this.remove()"></span>			<span class="name">
+									<a href="https://datascienceplus.com/author/afsan-khan/">Afsan Khan</a>
+							</span>
+							<span class="lang">Python</span>
+					</div>
+	</article>
+						</div>
+				</div>
+			</section>
+			</main><!-- #content -->
+
+<footer class="site-footer">
+	<div class="foot-inner">
+		<div class="foot-top">
+			<div class="foot-about">
+				<a class="foot-brand" href="https://datascienceplus.com/">data<b>science+</b></a>
+				<p>Practical data science tutorials in R and Python — statistics, machine learning, data visualization, and programming — written by a community of more than a hundred contributors since 2015.</p>
+			</div>
+			<nav class="foot-cols" aria-label="Footer">
+				<div class="foot-col">
+					<h2>Follow</h2>
+					<a href="https://x.com/datascienceplus" rel="noopener">X (Twitter)</a>
+					<a href="https://bsky.app/profile/datascienceplus.bsky.social" rel="noopener">Bluesky</a>
+					<a href="https://www.linkedin.com/company/datascienceplus" rel="noopener">LinkedIn</a>
+				</div>
+				<div class="foot-col">
+					<h2>Contribute</h2>
+											<a href="https://datascienceplus.com/write-for-us/">Write for Us</a>
+						<a href="https://datascienceplus.com/register/">Register</a>
+										<a href="https://datascienceplus.com/authors/">Authors</a>
+				</div>
+				<div class="foot-col">
+					<h2>Site</h2>
+					<a href="https://datascienceplus.com/privacy-policy/">Privacy Policy</a>
+					<a href="https://datascienceplus.com/terms-of-service/">Terms of Service</a>
+					<a href="https://datascienceplus.com/contact-us/">Contact</a>
+										<a href="#cookie-choices" data-cookie-choices hidden>Cookie choices</a>
+				</div>
+			</nav>
+		</div>
+		<div class="foot-bottom">© 2015–2026 DataScience+</div>
+	</div>
+</footer>
+
+<script>
+/* StatCounter analytics. sc_client_storage 'disabled' keeps it off our
+   domain's cookies and localStorage, and the project's cookie opt-out (set
+   in the StatCounter dashboard) stops the statcounter.com cookies, so it sets
+   none. Readers in the EEA/UK/CH still opt in first through dsp-core's cookie
+   banner (consent.php), since the beacon sends the IP and keeps a session
+   config key; everyone else loads it directly. Withdrawing clears that key. */
+(function () {
+	var done = false;
+	function load() {
+		if (done) { return; }
+		done = true;
+		window.sc_project = 10637365;
+		window.sc_invisible = 1;
+		window.sc_security = '74bbea50';
+		window.sc_client_storage = 'disabled';
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = 'https://www.statcounter.com/counter/counter.js';
+		document.body.appendChild(s);
+	}
+	if (window.dspConsent) {
+		dspConsent.whenGranted(load, function () {
+			try { sessionStorage.removeItem('statcounter_config'); } catch (e) {}
+		});
+	} else {
+		load();
+	}
+})();
+</script>
+<noscript><div class="statcounter"><a title="Web Analytics" href="https://statcounter.com/" target="_blank"><img class="statcounter" src="https://c.statcounter.com/10637365/0/74bbea50/1/" alt="Web Analytics" referrerPolicy="no-referrer-when-downgrade"></a></div></noscript>
+
+<script>
+/* iPhone Safari paints the strip under its bottom toolbar / home indicator
+   with body's background-color (nothing else — see body rule in style.css).
+   Swap it to the footer panel color while the footer is on screen so the
+   footer visually runs to the rounded bottom edge; var() keeps it in sync
+   with the light/dark toggle. */
+(function () {
+	var footer = document.querySelector('.site-footer');
+	if (!footer || !('IntersectionObserver' in window)) { return; }
+	new IntersectionObserver(function (entries) {
+		document.body.style.backgroundColor = entries[0].isIntersecting ? 'var(--panel-2)' : '';
+	}).observe(footer);
+})();
+
+(function () {
+	var btn = document.getElementById('dsplus-theme-toggle');
+	if (!btn) { return; }
+	btn.addEventListener('click', function () {
+		var cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+		var next = cur === 'dark' ? 'light' : 'dark';
+		document.documentElement.setAttribute('data-theme', next);
+		try { localStorage.setItem('dsplus-theme', next); } catch (e) {}
+	});
+})();
+
+/* Mobile: collapse the nav search to an icon; tapping it expands the field. */
+(function () {
+	var nav = document.querySelector('.nav');
+	if (!nav) { return; }
+	var form = nav.querySelector('.navsearch');
+	var toggle = nav.querySelector('.navsearch-toggle');
+	var closeBtn = nav.querySelector('.navsearch-close');
+	var input = form ? form.querySelector('input[type="search"]') : null;
+	if (!form || !toggle || !input) { return; }
+
+	function isMobile() { return window.matchMedia('(max-width: 560px)').matches; }
+	function close() {
+		nav.classList.remove('search-open');
+		input.blur();
+	}
+
+	toggle.addEventListener('click', function (e) {
+		if (!isMobile()) { return; }          // desktop: field is always open, do nothing
+		if (!nav.classList.contains('search-open')) {
+			e.preventDefault();
+			nav.classList.add('search-open');
+			input.focus();
+		}
+	});
+	if (closeBtn) { closeBtn.addEventListener('click', close); }
+	input.addEventListener('keydown', function (e) { if (e.key === 'Escape') { close(); } });
+	document.addEventListener('click', function (e) {
+		if (nav.classList.contains('search-open') && !form.contains(e.target)) { close(); }
+	});
+	window.addEventListener('resize', function () {
+		if (!isMobile()) { nav.classList.remove('search-open'); }
+	});
+})();
+
+/* R/Python switch: swap the results in place (no page reload, no scroll jump). */
+(function () {
+	var browse = document.getElementById('browse');
+	if (!browse || !window.fetch || !window.history.pushState) { return; }
+
+	// Pull the R/Python control up under the sticky nav so results are visible —
+	// but only if it isn't already near the top (avoids a pointless jump).
+	function alignToTop() {
+		var seg = browse.querySelector('.seg-wrap') || browse;
+		var navH = 52, gap = 44; // 52 + 44 = 96px, matches #browse scroll-margin-top
+		var top = seg.getBoundingClientRect().top;
+		if (Math.abs(top - (navH + gap)) > 6) {
+			var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+			window.scrollTo({
+				top: window.scrollY + top - navH - gap,
+				behavior: reduce ? 'auto' : 'smooth'
+			});
+		}
+	}
+
+	document.addEventListener('click', function (e) {
+		var a = e.target.closest('.segmented a, .filters a, a.sort-toggle');
+		if (!a || !browse.contains(a)) { return; }
+
+		// Already the active view: don't reload, just scroll up to the control.
+		if (a.classList.contains('on')) { e.preventDefault(); alignToTop(); return; }
+
+		e.preventDefault();
+		var url = a.getAttribute('href');
+		browse.style.opacity = '0.55';
+
+		fetch(url, { credentials: 'same-origin' })
+			.then(function (r) { return r.text(); })
+			.then(function (html) {
+				var doc  = new DOMParser().parseFromString(html, 'text/html');
+				var next = doc.getElementById('browse');
+				if (next) { browse.innerHTML = next.innerHTML; }
+				// The page header above the band lives outside #browse — swap it
+				// too so a category switch updates the whole page. Home uses
+				// .hero where archives use .head, so replace whichever is there
+				// with whichever the fetched page has (home ↔ category both ways).
+				var srcTop = doc.querySelector('.head, .hero');
+				var dstTop = document.querySelector('.head, .hero');
+				if (srcTop && dstTop) {
+					// Swapping hero ↔ head changes the height above the band; shift
+					// scroll by the same amount instantly so the band doesn't
+					// visibly move (alignToTop then has little or nothing to do).
+					var before = browse.getBoundingClientRect().top;
+					dstTop.replaceWith(document.importNode(srcTop, true));
+					var delta = browse.getBoundingClientRect().top - before;
+					// 'instant' overrides the html { scroll-behavior: smooth } rule,
+					// which would otherwise animate this compensation into view.
+					if (delta) { window.scrollTo({ top: Math.max(0, window.scrollY + delta), left: 0, behavior: 'instant' }); }
+				}
+				browse.style.opacity = '';
+				if (doc.title) { document.title = doc.title; }
+				history.pushState(null, '', url.replace('#browse', ''));
+				alignToTop();
+				if (window.dspInitInfinite) { window.dspInitInfinite(); }
+			})
+			.catch(function () { window.location = url; });
+	});
+
+	// Back/forward should reflect the previous view.
+	window.addEventListener('popstate', function () { window.location.reload(); });
+
+	// Arriving fresh from a home chip: the URL carries #browse, so the browser
+	// does an instant native jump that lands the R/Python control too low. Reset
+	// to the top and smooth-scroll it into place, matching the in-place feel.
+	if (window.location.hash === '#browse') {
+		window.scrollTo(0, 0);
+		history.replaceState(null, '', window.location.href.replace('#browse', ''));
+		requestAnimationFrame(function () { requestAnimationFrame(alignToTop); });
+	}
+})();
+
+/* ToC links: eased scroll to the heading. Native CSS smooth scrolling is
+   browser-controlled and lands abruptly on long jumps; this animates with a
+   gentle ease-in-out and a distance-scaled duration instead. */
+(function () {
+	var toc = document.querySelector('.toc');
+	if (!toc) { return; }
+
+	toc.addEventListener('click', function (e) {
+		var a = e.target.closest('a[href^="#"]');
+		if (!a) { return; }
+		var target = document.getElementById(decodeURIComponent(a.getAttribute('href').slice(1)));
+		if (!target) { return; }
+		e.preventDefault();
+		history.pushState(null, '', a.getAttribute('href'));
+
+		var margin = parseFloat(getComputedStyle(target).scrollMarginTop) || 0;
+		var to = window.scrollY + target.getBoundingClientRect().top - margin;
+		to = Math.max(0, Math.min(to, document.documentElement.scrollHeight - window.innerHeight));
+
+		if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+			window.scrollTo({ top: to, behavior: 'instant' });
+			return;
+		}
+
+		var from = window.scrollY, dist = to - from;
+		var dur = Math.min(750, 320 + Math.abs(dist) * 0.15), start = null;
+		function step(ts) {
+			if (start === null) { start = ts; }
+			var t = Math.min(1, (ts - start) / dur);
+			var ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+			// 'instant' so the html { scroll-behavior: smooth } rule doesn't
+			// re-smooth each frame's position on top of our animation.
+			window.scrollTo({ top: from + dist * ease, behavior: 'instant' });
+			if (t < 1) { requestAnimationFrame(step); }
+		}
+		requestAnimationFrame(step);
+	});
+})();
+
+/* In-house image lightbox: click a post image to view it full-screen. */
+(function () {
+	var imgs = document.querySelectorAll('.entry-content img');
+	if (!imgs.length) { return; }
+
+	var box, boxImg;
+	function build() {
+		box = document.createElement('div');
+		box.className = 'dsp-lightbox';
+		box.setAttribute('role', 'dialog');
+		box.setAttribute('aria-modal', 'true');
+		box.innerHTML = '<button class="dsp-lightbox-close" aria-label="Close">✕</button><img alt="">';
+		boxImg = box.querySelector('img');
+		box.addEventListener('click', close);
+		document.body.appendChild(box);
+	}
+	function open(src, alt) {
+		if (!box) { build(); }
+		boxImg.src = src;
+		boxImg.alt = alt || '';
+		document.body.style.overflow = 'hidden';
+		requestAnimationFrame(function () { box.classList.add('open'); });
+	}
+	function close() {
+		if (!box) { return; }
+		box.classList.remove('open');
+		document.body.style.overflow = '';
+	}
+
+	imgs.forEach(function (img) {
+		var link = img.closest('a');
+		if (link) {
+			var href = link.getAttribute('href') || '';
+			if (/\.(jpe?g|png|gif|webp|avif)$/i.test(href)) {
+				link.addEventListener('click', function (e) { e.preventDefault(); open(href, img.alt); });
+				return;
+			}
+		}
+		img.addEventListener('click', function () { open(img.currentSrc || img.src, img.alt); });
+	});
+
+	document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { close(); } });
+})();
+
+/* "Show more" pagination: load the next page of cards on click and mark each
+   batch with a "Page N" divider. No-JS readers get the plain link (full reload). */
+(function () {
+	var marker = null, grid = null, page = 1, loading = false;
+
+	function loadNext(e) {
+		if (e) { e.preventDefault(); }
+		if (loading || !marker || !grid) { return; }
+		var url = marker.getAttribute('data-next');
+		if (!url) { return; }
+		loading = true;
+		marker.classList.add('loading');
+		fetch(url, { credentials: 'same-origin' })
+			.then(function (r) { return r.text(); })
+			.then(function (html) {
+				var doc = new DOMParser().parseFromString(html, 'text/html');
+				var newGrid = doc.querySelector('.browse .grid');
+				page += 1;
+
+				var divider = document.createElement('div');
+				divider.className = 'page-divider';
+				divider.innerHTML = '<span>Page ' + page + '</span>';
+				grid.appendChild(divider);
+
+				if (newGrid) {
+					Array.prototype.slice.call(newGrid.children).forEach(function (card) {
+						if (!card.classList || !card.classList.contains('page-divider')) { grid.appendChild(card); }
+					});
+				}
+
+				var ns = doc.querySelector('.infinite-more');
+				var nextUrl = ns ? ns.getAttribute('data-next') : '';
+				if (nextUrl) {
+					marker.setAttribute('data-next', nextUrl);
+					var lk = marker.querySelector('.more-link');
+					if (lk) { lk.setAttribute('href', nextUrl); }
+				} else {
+					marker.parentNode.removeChild(marker);
+					marker = null;
+				}
+				loading = false;
+				if (marker) { marker.classList.remove('loading'); }
+			})
+			.catch(function () { loading = false; if (marker) { marker.classList.remove('loading'); } });
+	}
+
+	window.dspInitInfinite = function () {
+		loading = false;
+		page = 1;
+		marker = document.querySelector('.infinite-more');
+		grid = document.querySelector('.browse .grid');
+		if (!marker || !grid) { return; }
+		var link = marker.querySelector('.more-link');
+		if (link && !marker.dataset.bound) {
+			marker.dataset.bound = '1';
+			link.addEventListener('click', loadNext);
+		}
+	};
+	window.dspInitInfinite();
+})();
+
+/* Copy button on code blocks — copies the code only (excludes <em> output).
+   Also on the publishing guide's code boxes (pre.onb-code). */
+(function () {
+	var pres = document.querySelectorAll('.entry-content pre, pre.onb-code');
+	if (!pres.length || !navigator.clipboard) { return; }
+
+	pres.forEach(function (pre) {
+		var wrap = document.createElement('div');
+		wrap.className = 'codeblock';
+		/* code block with a plot attached below: let it sit flush (no gap) */
+		if (pre.classList.contains('has-plot')) { wrap.classList.add('has-plot'); }
+		if (pre.classList.contains('onb-code')) { wrap.classList.add('onb'); }
+		pre.parentNode.insertBefore(wrap, pre);
+		wrap.appendChild(pre);
+
+		var btn = document.createElement('button');
+		btn.type = 'button';
+		btn.className = 'code-copy';
+		btn.textContent = 'Copy';
+		wrap.appendChild(btn);
+
+		btn.addEventListener('click', function () {
+			var clone = pre.cloneNode(true);
+			clone.querySelectorAll('em').forEach(function (e) { e.remove(); }); // drop output
+			var text = clone.textContent.replace(/\s+$/, '');
+			navigator.clipboard.writeText(text).then(function () {
+				btn.textContent = 'Copied';
+				btn.classList.add('copied');
+				setTimeout(function () { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+			});
+		});
+	});
+})();
+</script>
+
+<script type="speculationrules">
+{"prefetch":[{"source":"document","where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":["/wp-*.php","/wp-admin/*","/wp-content/uploads/*","/wp-content/*","/wp-content/plugins/*","/wp-content/themes/dsplus/*","/*\\?(.+)"]}},{"not":{"selector_matches":"a[rel~=\"nofollow\"]"}},{"not":{"selector_matches":".no-prefetch, .no-prefetch a"}}]},"eagerness":"conservative"}]}
+</script>
+<script id="dsplus-hljs-js" src="https://datascienceplus.com/wp-content/themes/dsplus/assets/hljs.min.js?ver=1794860280"></script>
+<script id="dsplus-hljs-js-after">
+(function(){
+	if(!window.hljs){return;}
+	document.querySelectorAll('.entry-content pre').forEach(function(pre){
+		Array.prototype.slice.call(pre.childNodes).forEach(function(node){
+			if(node.nodeType===3 && node.textContent.trim()){
+				var r=hljs.highlightAuto(node.textContent,['r','python']);
+				var s=document.createElement('span'); s.className='hljs'; s.innerHTML=r.value;
+				pre.replaceChild(s,node);
+			}else if(node.nodeType===1 && node.tagName==='CODE'){
+				var r2=hljs.highlightAuto(node.textContent,['r','python']);
+				node.innerHTML=r2.value; node.classList.add('hljs');
+			}
+		});
+	});
+	/* Guide code boxes; exposed so the token generator can re-highlight
+	   #dsp-pub-snippet after it swaps the token into the text. */
+	window.dspHighlightCode = function(pre){
+		var r=hljs.highlightAuto(pre.textContent,['r','python']);
+		pre.innerHTML=r.value; pre.classList.add('hljs');
+	};
+	document.querySelectorAll('pre.onb-code').forEach(window.dspHighlightCode);
+})();
+//# sourceURL=dsplus-hljs-js-after
+</script>
+<script id="MathJax-script" async id="dsplus-mathjax-js-before">
+window.MathJax = {
+	tex: {
+		inlineMath: [['\\(', '\\)']],
+		displayMath: [['$$', '$$'], ['\\[', '\\]']],
+		processEscapes: true
+	},
+	chtml: {
+		fontURL: 'https://datascienceplus.com/wp-content/themes/dsplus/assets/mathjax/output/chtml/fonts/woff-v2',
+		displayOverflow: 'scroll'
+	},
+	options: {
+		skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+		ignoreHtmlClass: 'entry-content-nomath'
+	}
+};
+//# sourceURL=dsplus-mathjax-js-before
+</script>
+<script id="MathJax-script" async id="dsplus-mathjax-js" src="https://datascienceplus.com/wp-content/themes/dsplus/assets/mathjax/tex-mml-chtml.js?ver=3.2.2"></script>
+<script defer id="akismet-frontend-js" src="https://datascienceplus.com/wp-content/plugins/akismet/_inc/akismet-frontend.js?ver=1787189166"></script>
+<script>
+(function () {
+	var slots = document.querySelectorAll('.dsp-carbon');
+	if (!slots.length) { return; }
+	var host = null; // the slot holding the ad, once loaded
+
+	function visibleSlot() {
+		for (var i = 0; i < slots.length; i++) {
+			if (slots[i].offsetWidth) { return slots[i]; }
+		}
+		return null;
+	}
+	/* Load into the visible slot; after a layout flip, move the ad there. */
+	function place() {
+		var slot = visibleSlot();
+		if (!slot || slot === host) { return; }
+		if (host) {
+			while (host.firstChild) { slot.appendChild(host.firstChild); }
+		} else {
+			var s = document.createElement('script');
+			s.async = true;
+			s.id = '_carbonads_js';
+			s.src = "https:\/\/cdn.carbonads.com\/carbon.js?serve=CWBI6237&placement=datasciencepluscom&format=cover";
+			slot.appendChild(s);
+		}
+		host = slot;
+	}
+	function start() {
+		place();
+		window.addEventListener('resize', place);
+	}
+	function stop() {
+		window.removeEventListener('resize', place);
+		if (host) { host.textContent = ''; host = null; }
+		['_bsap_daycap', '_bsap_lifecap'].forEach(function (c) {
+			document.cookie = c + '=; Max-Age=0; SameSite=Lax; path=/';
+		});
+	}
+
+	if (window.dspConsent) {
+		dspConsent.whenGranted(start, stop);
+	} else {
+		start();
+	}
+})();
+</script>
+		</body>
+</html>

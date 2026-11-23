@@ -1,0 +1,39 @@
+{
+  "source_url": "https://towardsdatascience.com/cracking-open-the-openai-python-api-230e4cae7971/",
+  "format": "html",
+  "title": "Cracking Open the OpenAI (Python) API | Towards Data Science",
+  "published": "2023-07-21",
+  "steps": [
+    {
+      "kind": "python",
+      "starts_with": "import openai"
+    },
+    {
+      "kind": "output",
+      "starts_with": "{'id': 'chatcmpl-7dk1Jkf5SDm2422nYRPL9x0QrlhI4',"
+    },
+    {
+      "kind": "python",
+      "starts_with": "# setting max number of tokens"
+    },
+    {
+      "kind": "python",
+      "starts_with": "# setting number of completions"
+    },
+    {
+      "kind": "python",
+      "starts_with": "# temperature=0"
+    },
+    {
+      "kind": "python",
+      "starts_with": "# temperature=2"
+    },
+    {
+      "kind": "python",
+      "starts_with": "# initial prompt with system message and 2 task examples"
+    }
+  ],
+  "packages": [
+    "openai"
+  ]
+}

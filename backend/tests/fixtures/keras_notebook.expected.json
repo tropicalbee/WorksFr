@@ -1,0 +1,153 @@
+{
+  "source_url": "https://raw.githubusercontent.com/rajshah4/image_keras/master/notebook.ipynb",
+  "format": "notebook",
+  "title": "Building an image classification model using very little data",
+  "published": null,
+  "steps": [
+    {
+      "kind": "python",
+      "starts_with": "##This notebook is built around using tensorflow as the backend for keras"
+    },
+    {
+      "kind": "python",
+      "starts_with": "##Updated to Keras 2.0"
+    },
+    {
+      "kind": "python",
+      "starts_with": "# dimensions of our images."
+    },
+    {
+      "kind": "python",
+      "starts_with": "##preprocessing"
+    },
+    {
+      "kind": "python",
+      "starts_with": "# a simple stack of 3 convolution layers with a ReLU activation and followed by max-pooling layers."
+    },
+    {
+      "kind": "python",
+      "starts_with": "model.compile(loss='binary_crossentropy',"
+    },
+    {
+      "kind": "python",
+      "starts_with": "epochs = 30"
+    },
+    {
+      "kind": "python",
+      "starts_with": "model.fit_generator("
+    },
+    {
+      "kind": "python",
+      "starts_with": "model.save_weights('models/basic_cnn_30_epochs.h5')"
+    },
+    {
+      "kind": "python",
+      "starts_with": "#model.save_weights('models_trained/basic_cnn_30_epochs.h5')"
+    },
+    {
+      "kind": "python",
+      "starts_with": "model.evaluate_generator(validation_generator, validation_samples)"
+    },
+    {
+      "kind": "python",
+      "starts_with": "train_datagen_augmented = ImageDataGenerator("
+    },
+    {
+      "kind": "python",
+      "starts_with": "model.fit_generator("
+    },
+    {
+      "kind": "python",
+      "starts_with": "model.save_weights('models/augmented_30_epochs.h5')"
+    },
+    {
+      "kind": "python",
+      "starts_with": "#model.load_weights('models_trained/augmented_30_epochs.h5')"
+    },
+    {
+      "kind": "python",
+      "starts_with": "model.evaluate_generator(validation_generator, validation_samples)"
+    },
+    {
+      "kind": "python",
+      "starts_with": "model_vgg = applications.VGG16(include_top=False, weights='imagenet')"
+    },
+    {
+      "kind": "python",
+      "starts_with": "train_generator_bottleneck = datagen.flow_from_directory("
+    },
+    {
+      "kind": "python",
+      "starts_with": "bottleneck_features_train = model_vgg.predict_generator(train_generator_bottleneck, train_samples // batch_size)"
+    },
+    {
+      "kind": "python",
+      "starts_with": "bottleneck_features_validation = model_vgg.predict_generator(validation_generator_bottleneck, validation_samples // batch_size)"
+    },
+    {
+      "kind": "python",
+      "starts_with": "train_data = np.load(open('models/bottleneck_features_train.npy', 'rb'))"
+    },
+    {
+      "kind": "python",
+      "starts_with": "model_top = Sequential()"
+    },
+    {
+      "kind": "python",
+      "starts_with": "model_top.fit(train_data, train_labels,"
+    },
+    {
+      "kind": "python",
+      "starts_with": "model_top.save_weights('models/bottleneck_30_epochs.h5')"
+    },
+    {
+      "kind": "python",
+      "starts_with": "#model_top.load_weights('models/bottleneck_30_epochs.h5)"
+    },
+    {
+      "kind": "python",
+      "starts_with": "model_top.evaluate(validation_data, validation_labels)"
+    },
+    {
+      "kind": "python",
+      "starts_with": "model_vgg = applications.VGG16(weights='imagenet', include_top=False, input_shape=(150, 150, 3))"
+    },
+    {
+      "kind": "python",
+      "starts_with": "top_model = Sequential()"
+    },
+    {
+      "kind": "python",
+      "starts_with": "for layer in model.layers[:15]:"
+    },
+    {
+      "kind": "python",
+      "starts_with": "# compile the model with a SGD/momentum optimizer"
+    },
+    {
+      "kind": "python",
+      "starts_with": "# prepare data augmentation configuration  . . . do we need this?"
+    },
+    {
+      "kind": "python",
+      "starts_with": "# fine-tune the model"
+    },
+    {
+      "kind": "python",
+      "starts_with": "model.save_weights('models/finetuning_30epochs_vgg.h5')"
+    },
+    {
+      "kind": "python",
+      "starts_with": "model.load_weights('models/finetuning_30epochs_vgg.h5')"
+    },
+    {
+      "kind": "python",
+      "starts_with": "model.evaluate_generator(validation_generator, validation_samples)"
+    }
+  ],
+  "packages": [
+    "keras",
+    "numpy",
+    "pillow"
+  ]
+}

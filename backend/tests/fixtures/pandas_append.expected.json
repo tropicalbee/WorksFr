@@ -1,0 +1,27 @@
+{
+  "source_url": "https://www.geeksforgeeks.org/python-pandas-dataframe-append/",
+  "format": "html",
+  "title": "Python - Pandas dataframe.append() - GeeksforGeeks",
+  "published": "2018-11-20",
+  "steps": [
+    {
+      "kind": "python",
+      "starts_with": "import pandas as pd"
+    },
+    {
+      "kind": "python",
+      "starts_with": "import pandas as pd"
+    },
+    {
+      "kind": "python",
+      "starts_with": "import pandas as pd"
+    },
+    {
+      "kind": "python",
+      "starts_with": "import pandas as pd"
+    }
+  ],
+  "packages": [
+    "pandas"
+  ]
+}
