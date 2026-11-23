@@ -1,0 +1,69 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./report.css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --bg: #08090a;
+  --surface: #0f1011;
+  --surface-code: #0b0c0d;
+  --border: rgba(255,255,255,0.08);
+  --border-strong: rgba(255,255,255,0.14);
+  --card-highlight: rgba(255,255,255,0.04);
+  --menu-backdrop: rgba(0,0,0,0.65);
+  --menu-shadow: rgba(0,0,0,0.5);
+  --text: #f7f8f8;
+  --text-2: #d0d6e0;
+  --text-3: #8a8f98;
+  --text-4: #62666d;
+  --works: #4cb782;
+  --deprecated: #e2a336;
+  --broken: #eb5757;
+  --ink: #828fff;
+  --unchecked: #8a8f98;
+  --background: var(--bg);
+  --foreground: var(--text);
+  --card: var(--surface);
+  --card-foreground: var(--text-2);
+  --popover: var(--surface);
+  --popover-foreground: var(--text);
+  --primary: var(--text);
+  --primary-foreground: var(--bg);
+  --secondary: var(--surface-code);
+  --secondary-foreground: var(--text-2);
+  --muted: var(--surface-code);
+  --muted-foreground: var(--text-3);
+  --accent: var(--surface-code);
+  --accent-foreground: var(--text);
+  --destructive: var(--broken);
+  --destructive-foreground: var(--bg);
+  --input: var(--border-strong);
+  --ring: var(--ink);
+  --radius: 0.75rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+}
