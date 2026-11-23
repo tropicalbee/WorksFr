@@ -1,0 +1,256 @@
+"""Domain types shared across extraction, sandbox, labeling, repair, storage and the API.
+
+Field names here are the contract between modules. Change them only together with
+docs/ARCHITECTURE.md.
+"""
+
+from datetime import date
+from enum import StrEnum
+from typing import Literal
+
+from pydantic import BaseModel, Field, computed_field
+
+
+class StepKind(StrEnum):
+    PYTHON = "python"
+    REPL = "repl"
+    SHELL = "shell"
+    OUTPUT = "output"
+    OTHER = "other"
+
+
+class Label(StrEnum):
+    WORKS = "works"
+    DEPRECATED = "deprecated"
+    BROKEN = "broken"
+    CANT_VERIFY = "cant_verify"
+
+
+class PatchVerdict(StrEnum):
+    """What a sandbox run of a patch proves (ADR-008). Decided by `labels.judge_patch`."""
+
+    FIXED = "fixed"
+    """The patch ran with no error."""
+    FIXED_UNVERIFIED = "fixed_unverified"
+    """The patch got past the broken API and stopped inside library code only because the
+    sandbox lacks a key, network, data file or GPU."""
+    FAILED = "failed"
+
+
+class SourceKind(StrEnum):
+    URL = "url"
+    NOTEBOOK = "notebook"
+
+
+class SourceFormat(StrEnum):
+    HTML = "html"
+    NOTEBOOK = "notebook"
+    GITHUB_README = "github_readme"
+    STACKOVERFLOW = "stackoverflow"
+
+
+class DateSource(StrEnum):
+    PAGE = "page"
+    ESTIMATE = "estimate"
+    UNKNOWN = "unknown"
+
+
+class CheckStatus(StrEnum):
+    RUNNING = "running"
+    DONE = "done"
+    FAILED = "failed"
+
+
+# Extraction
+
+
+class Block(BaseModel):
+    """One code block from the tutorial, in page order."""
+
+    idx: int
+    kind: StepKind
+    code: str
+    """The block's text as published, after HTML unescaping."""
+    runnable_code: str | None = None
+    """What gets sent to the sandbox: REPL prompts and output lines stripped, notebook
+    `!` and `%` lines removed. None for kinds that never run (shell, output, other)."""
+    context: str = ""
+    """Prose or Markdown just before the block, used as context for explanations."""
+
+
+class Extraction(BaseModel):
+    source_kind: SourceKind
+    source_format: SourceFormat
+    source: str
+    """The URL, or the uploaded notebook's file name."""
+    title: str | None = None
+    published: date | None = None
+    date_source: DateSource = DateSource.UNKNOWN
+    blocks: list[Block]
+    packages: list[str]
+    """Sorted PyPI names, standard library excluded, version pins dropped."""
+
+
+# Sandbox runner replies (see ARCHITECTURE.md, "Runner protocol")
+
+
+class WarningInfo(BaseModel):
+    category: str
+    message: str
+    filename: str = ""
+    lineno: int | None = None
+    module: str = ""
+    """Top-level package the warning came from, or "__step__" for step code."""
+
+
+class ErrorInfo(BaseModel):
+    type: str
+    message: str
+    traceback: str = ""
+
+
+class ExecResult(BaseModel):
+    id: str
+    status: Literal["ok", "error"]
+    stdout: str = ""
+    stderr: str = ""
+    result: str | None = None
+    warnings: list[WarningInfo] = Field(default_factory=list)
+    error: ErrorInfo | None = None
+    duration_ms: int = 0
+
+
+class ClosestMatch(BaseModel):
+    name: str
+    signature: str | None = None
+    doc: str | None = None
+
+
+class ProbeResult(BaseModel):
+    id: str
+    status: Literal["ok", "error"]
+    target_found: bool = False
+    exists: bool = False
+    close_matches: list[str] = Field(default_factory=list)
+    closest: ClosestMatch | None = None
+    package: str | None = None
+    version: str | None = None
+    error: ErrorInfo | None = None
+
+
+class Environment(BaseModel):
+    """What the sandbox ended up with after installing the tutorial's packages."""
+
+    versions: dict[str, str] = Field(default_factory=dict)
+    failed_packages: list[str] = Field(default_factory=list)
+    """Names pip could not install, for example an author's local module."""
+
+
+# Labeling
+
+
+class LabelDecision(BaseModel):
+    label: Label
+    reason: str = ""
+    """Why the step got this label. Required for CANT_VERIFY, for example
+    "needs an API key" or "needs keyboard input"."""
+
+
+# Repair
+
+
+class RepairProposal(BaseModel):
+    """The JSON reply the LLM must produce for one repair attempt."""
+
+    patched_code: str
+    explanation: str
+    apis_changed: list[str] = Field(default_factory=list)
+
+
+class RepairAttempt(BaseModel):
+    attempt: int
+    """1-based."""
+    patched_code: str
+    explanation: str
+    apis_changed: list[str] = Field(default_factory=list)
+    provider: str | None = None
+    """The LLM provider that proposed the patch."""
+    result: ExecResult | None = None
+    """None when the patch timed out or was rejected before running."""
+    decision: LabelDecision
+    """How the patched run would be labeled."""
+    verdict: PatchVerdict
+
+
+# Report
+
+
+class Score(BaseModel):
+    works: int = 0
+    deprecated: int = 0
+    broken: int = 0
+    cant_verify: int = 0
+    fixed: int = 0
+    """Broken steps with verdict FIXED. They stay counted under broken."""
+    fixed_unverified: int = 0
+    """Broken steps with verdict FIXED_UNVERIFIED. They stay counted under broken."""
+
+    @computed_field
+    @property
+    def still_run(self) -> int:
+        return self.works + self.deprecated
+
+    @computed_field
+    @property
+    def checked(self) -> int:
+        return self.works + self.deprecated + self.broken
+
+    @computed_field
+    @property
+    def ratio(self) -> float | None:
+        """still_run / checked, or None when nothing could be checked."""
+        return self.still_run / self.checked if self.checked else None
+
+
+class StepReport(BaseModel):
+    idx: int
+    kind: StepKind
+    original_code: str
+    """The block as published."""
+    final_code: str
+    """What the downloads show: the published code with the accepted patch applied and
+    notebook `!`/`%` lines kept. Equal to `original_code` when nothing was fixed."""
+    label: Label | None = None
+    """The label of the original run. None for blocks that never run. A fixed step keeps
+    its BROKEN label; `verdict` says it was fixed."""
+    reason: str = ""
+    verdict: PatchVerdict | None = None
+    """None when no repair was attempted."""
+    repair_attempts: list[RepairAttempt] = Field(default_factory=list)
+    explanation: str = ""
+    """The accepted patch's explanation."""
+    apis_changed: list[str] = Field(default_factory=list)
+    output: str = ""
+    error: ErrorInfo | None = None
+    warnings: list[WarningInfo] = Field(default_factory=list)
+
+    @property
+    def fixed(self) -> bool:
+        return self.verdict in (PatchVerdict.FIXED, PatchVerdict.FIXED_UNVERIFIED)
+
+
+class CheckReport(BaseModel):
+    id: str
+    source_kind: SourceKind
+    source: str
+    title: str | None = None
+    published: date | None = None
+    date_source: DateSource = DateSource.UNKNOWN
+    status: CheckStatus
+    score: Score | None = None
+    versions: dict[str, str] = Field(default_factory=dict)
+    """Installed version of each requested package, keyed by its PyPI name."""
+    failed_packages: list[str] = Field(default_factory=list)
+    steps: list[StepReport] = Field(default_factory=list)
+    error: str | None = None
+    """Why the whole check failed, when status is FAILED."""
