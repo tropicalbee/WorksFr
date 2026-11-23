@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     sandbox_memory: str = "2g"
     sandbox_cpus: float = 2.0
     sandbox_pids_limit: int = 256
+    max_concurrent_checks: int = Field(default=1, ge=1)
+    max_upload_mb: int = Field(default=10, ge=1)
 
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
 
