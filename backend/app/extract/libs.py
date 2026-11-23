@@ -8,6 +8,8 @@ import ast
 import re
 import shlex
 
+from packaging.requirements import InvalidRequirement, Requirement
+
 from app.models import Block, StepKind
 from app.packages import IMPORT_TO_PYPI as IMPORT_TO_PYPI
 from app.packages import dist_for_import as pypi_name
@@ -77,6 +79,29 @@ def packages_from_pip_line(line: str) -> list[str]:
 
     Version pins, extras, markers, flags, requirement files, paths and URLs are dropped.
     """
+    return [
+        name for token in _requirements_from_pip_line(line) if (name := _requirement_name(token))
+    ]
+
+
+def pins_from_pip_line(line: str) -> list[tuple[str, str]]:
+    """Canonical package names and original specifiers, without evaluating markers."""
+    pins: list[tuple[str, str]] = []
+    for token in _requirements_from_pip_line(line):
+        head = token.split(";", 1)[0].strip()
+        try:
+            requirement = Requirement(head)
+        except InvalidRequirement:
+            continue
+        if not requirement.specifier or not (name := _requirement_name(token)):
+            continue
+        suffix = head[len(requirement.name) :].strip()
+        suffix = re.sub(r"^\[[^\]]*\]", "", suffix).strip()
+        pins.append((name, suffix))
+    return pins
+
+
+def _requirements_from_pip_line(line: str) -> list[str]:
     line = line.strip().lstrip("!%$").strip()
     if not line or line.startswith("#"):
         return []
@@ -88,14 +113,14 @@ def packages_from_pip_line(line: str) -> list[str]:
     segment: list[str] = []
     for token in [*tokens, ";"]:
         if token in _COMMAND_BREAKS:
-            names.extend(_packages_from_command(segment))
+            names.extend(_requirements_from_command(segment))
             segment = []
         else:
             segment.append(token)
     return names
 
 
-def _packages_from_command(tokens: list[str]) -> list[str]:
+def _requirements_from_command(tokens: list[str]) -> list[str]:
     start = _install_index(tokens)
     if start is None:
         return []
@@ -110,7 +135,7 @@ def _packages_from_command(tokens: list[str]) -> list[str]:
             continue
         name = _requirement_name(token)
         if name:
-            names.append(name)
+            names.append(token)
     return names
 
 

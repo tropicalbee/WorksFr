@@ -239,6 +239,14 @@ class StepReport(BaseModel):
         return self.verdict in (PatchVerdict.FIXED, PatchVerdict.FIXED_UNVERIFIED)
 
 
+class InstallPin(BaseModel):
+    step_idx: int
+    line: str
+    package: str
+    pinned: str
+    used: str | None
+
+
 class CheckReport(BaseModel):
     id: str
     source_kind: SourceKind
@@ -251,6 +259,7 @@ class CheckReport(BaseModel):
     versions: dict[str, str] = Field(default_factory=dict)
     """Installed version of each requested package, keyed by its PyPI name."""
     failed_packages: list[str] = Field(default_factory=list)
+    install_pins: list[InstallPin] = Field(default_factory=list)
     steps: list[StepReport] = Field(default_factory=list)
     error: str | None = None
     """Why the whole check failed, when status is FAILED."""

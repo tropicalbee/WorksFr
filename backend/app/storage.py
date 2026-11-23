@@ -18,6 +18,7 @@ from app.models import (
     StepReport,
     WarningInfo,
 )
+from app.pins import find_install_pins
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS checks (
@@ -246,6 +247,10 @@ def _report(row: sqlite3.Row, steps: list[StepReport]) -> CheckReport:
         failed_packages=STRINGS.validate_json(row["failed_packages_json"]),
         error=row["error"],
         steps=steps,
+        install_pins=find_install_pins(
+            ((step.idx, step.original_code) for step in steps),
+            VERSIONS.validate_json(row["versions_json"]),
+        ),
     )
 
 

@@ -125,13 +125,13 @@ CANT = Label.CANT_VERIFY
             err("ModuleNotFoundError", "No module named 'mylocal'"),
             {"failed_packages": ["mylocal"]},
             CANT,
-            "local file",
+            "didn't install",
         ),
         (
             err("ModuleNotFoundError", "No module named 'My_Local.sub'"),
             {"failed_packages": ["my-local"]},
             CANT,
-            "local file",
+            "didn't install",
         ),
         (
             err("ModuleNotFoundError", "No module named 'mylocal'"),

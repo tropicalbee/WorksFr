@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     sandbox_pids_limit: int = 256
     max_concurrent_checks: int = Field(default=1, ge=1)
     max_upload_mb: int = Field(default=10, ge=1)
+    max_steps: int = Field(default=150, ge=1)
 
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
 

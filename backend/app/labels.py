@@ -131,7 +131,12 @@ def label_step(
     if etype == "FileNotFoundError" and _is_relative_missing_file(message):
         return LabelDecision(label=Label.CANT_VERIFY, reason=REASON_DATA_FILE)
     if etype == "ModuleNotFoundError" and _missing_module_is_failed(message, failed_packages):
-        return LabelDecision(label=Label.CANT_VERIFY, reason=REASON_LOCAL_MODULE)
+        found = _MODULE_NAME.search(message)
+        package = dist_for_import(found.group(1).split(".")[0]) if found else "The package"
+        return LabelDecision(
+            label=Label.CANT_VERIFY,
+            reason=f"{package} didn't install in the sandbox, so this step couldn't run.",
+        )
     return LabelDecision(label=Label.BROKEN, reason=f"{etype}: {message}".strip(": "))
 
 
@@ -206,7 +211,13 @@ def judge_patch(
         result
         and result.error
         and decision.label == Label.CANT_VERIFY
-        and decision.reason in environment_reasons
+        and (
+            decision.reason in environment_reasons
+            or (
+                result.error.type == "ModuleNotFoundError"
+                and _missing_module_is_failed(result.error.message, failed_packages)
+            )
+        )
     ):
         frames = re.findall(r'File "([^"]+)", line [0-9]+', result.error.traceback)
         if frames and not frames[-1].startswith("<step-"):

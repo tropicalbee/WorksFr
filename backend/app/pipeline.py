@@ -20,8 +20,9 @@ from app.events import (
     StepResultEvent,
     StepStartedEvent,
 )
-from app.extract import extract_notebook, extract_url
-from app.models import Label, RepairAttempt
+from app.extract import ExtractionError, extract_notebook, extract_url
+from app.models import Label, RepairAttempt, SourceFormat, StepKind
+from app.pins import find_install_pins
 from app.repair.evidence import DocCache
 from app.repair.loop import Proposer, RepairContext, repair_step
 from app.sandbox.interface import Sandbox
@@ -58,6 +59,20 @@ def run_check(
             if isinstance(source, str)
             else extract_notebook(*source)
         )
+        if not extraction.blocks:
+            raise ExtractionError("This page has no code blocks to check.")
+        runnable = sum(
+            block.kind in (StepKind.PYTHON, StepKind.REPL) for block in extraction.blocks
+        )
+        if not runnable:
+            raise ExtractionError(
+                "This page has code, but none of it is Python that WorksFr can run."
+            )
+        if extraction.source_format == SourceFormat.NOTEBOOK and runnable > deps.settings.max_steps:
+            raise ExtractionError(
+                f"This notebook has {runnable} runnable cells. "
+                f"WorksFr checks at most {deps.settings.max_steps}."
+            )
         sink.emit(
             ExtractedEvent(
                 blocks=[
@@ -76,7 +91,12 @@ def run_check(
             environment = session.start(extraction.packages)
             sink.emit(
                 EnvironmentEvent(
-                    versions=environment.versions, failed_packages=environment.failed_packages
+                    versions=environment.versions,
+                    failed_packages=environment.failed_packages,
+                    install_pins=find_install_pins(
+                        ((block.idx, block.code) for block in extraction.blocks),
+                        environment.versions,
+                    ),
                 )
             )
             for step in steps:
@@ -115,11 +135,13 @@ def run_check(
                         )
                         unavailable = outcome.llm_unavailable
                     if unavailable and decision.label == Label.BROKEN:
-                        decision.reason += "; repairs unavailable: no LLM provider available"
+                        decision.reason = "No repair was tried: every LLM provider was unavailable."
                 sink.emit(StepFinalEvent(step=step.to_report()))
         sink.emit(DoneEvent(score=compute_score([step.to_report() for step in steps])))
-    except Exception as exc:
+    except ExtractionError as exc:
+        sink.emit(FailedEvent(error=_redact(str(exc), deps.settings)))
+    except Exception:
         logger.error(
             "Check %s failed:\n%s", check_id, _redact(traceback.format_exc(), deps.settings)
         )
-        sink.emit(FailedEvent(error=_redact(f"{type(exc).__name__}: {exc}", deps.settings)))
+        sink.emit(FailedEvent(error="The check stopped because of an internal error."))

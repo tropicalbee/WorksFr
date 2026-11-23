@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from app.models import (
     DateSource,
     ErrorInfo,
+    InstallPin,
     Label,
     RepairAttempt,
     Score,
@@ -36,6 +37,7 @@ class EnvironmentEvent(BaseModel):
     type: Literal["environment"] = "environment"
     versions: dict[str, str]
     failed_packages: list[str]
+    install_pins: list[InstallPin] = Field(default_factory=list)
 
 
 class StepStartedEvent(BaseModel):
