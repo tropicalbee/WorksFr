@@ -1,7 +1,7 @@
 """OpenAI-compatible providers with ordered fallback and validated JSON replies."""
 
 import logging
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 import httpx
 from openai import APIError, OpenAI
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 
-class LLMResult(BaseModel, Generic[T]):
+class LLMResult[T: BaseModel](BaseModel):
     value: T
     provider: str
 

@@ -171,6 +171,22 @@ def test_no_configured_provider_fails_at_call(settings: Settings) -> None:
         client.complete_json(MESSAGES, RepairProposal)
 
 
+def test_provider_defined_only_in_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDERS", "local")
+    monkeypatch.setenv("LLM_LOCAL_BASE_URL", "https://local.test/v1")
+    monkeypatch.setenv("LLM_LOCAL_API_KEY", "local-secret")
+    monkeypatch.setenv("LLM_LOCAL_MODEL", "local-model")
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        assert request.url.host == "local.test"
+        assert json.loads(request.content)["model"] == "local-model"
+        return completion(VALID)
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as http:
+        result = LLMClient(Settings(_env_file=None), http).complete_json(MESSAGES, RepairProposal)
+        assert result.provider == "local"
+
+
 def test_returned_provider_is_not_mutable_client_state(settings: Settings) -> None:
     responses: Iterator[httpx.Response] = iter(
         [completion(VALID), *(httpx.Response(429, json={"error": "limited"}) for _ in range(3))]
