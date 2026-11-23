@@ -7,81 +7,12 @@ Every non-standard-library import is listed; the sandbox reports the names pip r
 import ast
 import re
 import shlex
-import sys
 
 from app.models import Block, StepKind
-
-# Import name -> PyPI name, for packages whose import name differs from the install name.
-# Dotted keys match a module path prefix. Extend this dict when a tutorial needs more.
-IMPORT_TO_PYPI: dict[str, str] = {
-    "sklearn": "scikit-learn",
-    "cv2": "opencv-python",
-    "PIL": "pillow",
-    "bs4": "beautifulsoup4",
-    "yaml": "pyyaml",
-    "skimage": "scikit-image",
-    "dateutil": "python-dateutil",
-    "dotenv": "python-dotenv",
-    "attr": "attrs",
-    "jwt": "pyjwt",
-    "serial": "pyserial",
-    "usb": "pyusb",
-    "OpenSSL": "pyopenssl",
-    "Crypto": "pycryptodome",
-    "Cryptodome": "pycryptodomex",
-    "git": "gitpython",
-    "magic": "python-magic",
-    "docx": "python-docx",
-    "pptx": "python-pptx",
-    "fitz": "pymupdf",
-    "mpl_toolkits": "matplotlib",
-    "pylab": "matplotlib",
-    "tensorflow_hub": "tensorflow-hub",
-    "tensorflow_datasets": "tensorflow-datasets",
-    "tensorflow_probability": "tensorflow-probability",
-    "tensorflow_text": "tensorflow-text",
-    "tf_keras": "tf-keras",
-    "google.generativeai": "google-generativeai",
-    "googleapiclient": "google-api-python-client",
-    "telegram": "python-telegram-bot",
-    "slugify": "python-slugify",
-    "socks": "pysocks",
-    "zmq": "pyzmq",
-    "sentence_transformers": "sentence-transformers",
-    "umap": "umap-learn",
-    "faiss": "faiss-cpu",
-    "langchain_openai": "langchain-openai",
-    "langchain_community": "langchain-community",
-    "langchain_core": "langchain-core",
-    "langchain_text_splitters": "langchain-text-splitters",
-    "langchain_anthropic": "langchain-anthropic",
-    "langchain_google_genai": "langchain-google-genai",
-    "llama_index": "llama-index",
-    "pydantic_settings": "pydantic-settings",
-    "win32api": "pywin32",
-    "win32com": "pywin32",
-    "speech_recognition": "speechrecognition",
-    "wx": "wxpython",
-    "gi": "pygobject",
-    "Xlib": "python-xlib",
-    "psycopg2": "psycopg2-binary",
-    "MySQLdb": "mysqlclient",
-    "ldap": "python-ldap",
-    "Bio": "biopython",
-    "kafka": "kafka-python",
-    "nacl": "pynacl",
-    "pkg_resources": "setuptools",
-    "IPython": "ipython",
-    "jose": "python-jose",
-    "multipart": "python-multipart",
-    "socketio": "python-socketio",
-    "engineio": "python-engineio",
-    "decouple": "python-decouple",
-    "cairo": "pycairo",
-    "OpenGL": "pyopengl",
-}
-
-_STDLIB = sys.stdlib_module_names
+from app.packages import IMPORT_TO_PYPI as IMPORT_TO_PYPI
+from app.packages import dist_for_import as pypi_name
+from app.packages import is_stdlib
+from app.packages import normalize as canonical_name
 
 _IMPORT_LINE = re.compile(
     r"^\s*(?:from\s+([A-Za-z_][\w.]*)\s+import\s|import\s+([A-Za-z_][\w., ]*))", re.M
@@ -99,21 +30,6 @@ _PIP_FLAGS_WITH_VALUE = {
 _COMMAND_BREAKS = {"&&", "||", ";", "|", "&"}
 _PIP_NAME = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)(?=$|[\[=<>~!;@ ])")
 _PIP_EXE = re.compile(r"pip(\d+(\.\d+)*)?(\.exe)?")
-
-
-def canonical_name(name: str) -> str:
-    """PyPI normalisation: lower case, runs of - _ . become one hyphen."""
-    return re.sub(r"[-_.]+", "-", name).lower()
-
-
-def pypi_name(module: str) -> str:
-    """Map a dotted import name to its PyPI name, longest known prefix first."""
-    parts = module.split(".")
-    for end in range(len(parts), 0, -1):
-        mapped = IMPORT_TO_PYPI.get(".".join(parts[:end]))
-        if mapped is not None:
-            return canonical_name(mapped)
-    return canonical_name(parts[0])
 
 
 def imported_modules(code: str) -> set[str]:
@@ -150,7 +66,7 @@ def packages_from_imports(code: str) -> set[str]:
     names: set[str] = set()
     for module in imported_modules(code):
         top = module.split(".")[0]
-        if top in _STDLIB:
+        if is_stdlib(top):
             continue
         names.add(pypi_name(module))
     return names

@@ -6,6 +6,43 @@ from app.labels import label_step, precheck
 from app.models import ErrorInfo, ExecResult, Label, WarningInfo
 
 
+def test_patch_verdict_requires_library_origin() -> None:
+    from app.labels import cascade_decision, cascade_source, judge_patch
+    from app.models import PatchVerdict
+
+    for filename, expected in (
+        ("<step-s1>", PatchVerdict.FAILED),
+        ("/lib/pathlib.py", PatchVerdict.FIXED_UNVERIFIED),
+    ):
+        result = ExecResult(
+            id="s1",
+            status="error",
+            error=ErrorInfo(
+                type="FileNotFoundError",
+                message="missing.csv",
+                traceback=f'File "{filename}", line 1, in read',
+            ),
+        )
+        assert judge_patch(result)[1] == expected
+    assert judge_patch(ExecResult(id="s1", status="ok"))[1] == PatchVerdict.FIXED
+    assert judge_patch(None, timed_out=True)[1] == PatchVerdict.FAILED
+    error = ErrorInfo(type="NameError", message="name 'x' is not defined")
+    assert cascade_source(error, {"x": 2}) == 2
+    assert cascade_decision(2).reason == "depends on step 3, which is still broken"
+
+
+def test_failed_distribution_matches_import_alias() -> None:
+    result = ExecResult(
+        id="s1",
+        status="error",
+        error=ErrorInfo(
+            type="ModuleNotFoundError",
+            message="No module named 'dotenv'",
+        ),
+    )
+    assert label_step(result, failed_packages=["Python_Dotenv"]).label == Label.CANT_VERIFY
+
+
 def ok(*categories: str) -> ExecResult:
     return ExecResult(
         id="s",

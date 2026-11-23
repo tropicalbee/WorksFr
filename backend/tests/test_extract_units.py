@@ -18,6 +18,12 @@ from app.extract.libs import (
 from app.extract.markdown_doc import parse_markdown
 from app.models import Block, StepKind
 
+
+@pytest.fixture(autouse=True)
+def public_resolver(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.extract.fetch.resolve_host", lambda host: ["93.184.216.34"])
+
+
 # URL routing
 
 

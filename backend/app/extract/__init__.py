@@ -7,6 +7,7 @@ import httpx
 
 from app.extract.blocks import build_blocks
 from app.extract.errors import ExtractionError
+from app.extract.fetch import check_url, fetch_url
 from app.extract.html_page import page_metadata, parse_html_blocks
 from app.extract.libs import IMPORT_TO_PYPI, detect_packages
 from app.extract.markdown_doc import parse_markdown
@@ -23,6 +24,7 @@ __all__ = [
     "extract_notebook",
     "extract_url",
     "route_url",
+    "check_url",
 ]
 
 MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024
@@ -32,18 +34,13 @@ def _fetch(client: httpx.Client, urls: tuple[str, ...]) -> tuple[str, bytes]:
     """Download the first URL that answers 200; (url, body)."""
     last_error = "no URL to fetch"
     for url in urls:
-        try:
-            response = client.get(url, follow_redirects=True)
-        except httpx.HTTPError as exc:
-            raise ExtractionError(f"Could not fetch {url}: {exc}") from exc
-        if response.status_code == 404 and len(urls) > 1:
+        status, content = fetch_url(client, url, max_bytes=MAX_DOWNLOAD_BYTES)
+        if status == 404 and len(urls) > 1:
             last_error = f"{url} not found"
             continue
-        if response.status_code >= 400:
-            raise ExtractionError(f"Fetching {url} returned HTTP {response.status_code}")
-        if len(response.content) > MAX_DOWNLOAD_BYTES:
-            raise ExtractionError(f"{url} is larger than {MAX_DOWNLOAD_BYTES // (1024 * 1024)} MB")
-        return url, response.content
+        if status >= 400:
+            raise ExtractionError(f"Fetching {url} returned HTTP {status}")
+        return url, content
     raise ExtractionError(f"No README found: {last_error}")
 
 
@@ -54,6 +51,7 @@ def extract_notebook(filename: str, data: bytes) -> Extraction:
 
 def extract_url(url: str, client: httpx.Client) -> Extraction:
     """Fetch and parse a tutorial URL. Raises ExtractionError when that is not possible."""
+    check_url(url)
     route = route_url(url)
 
     if route.kind == "stackoverflow":

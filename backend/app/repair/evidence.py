@@ -11,6 +11,7 @@ import json
 import logging
 import re
 import textwrap
+from collections.abc import Callable
 from typing import Literal, Protocol
 from urllib.parse import urlparse
 
@@ -21,7 +22,7 @@ from pydantic import BaseModel
 
 from app.config import Settings
 from app.models import ErrorInfo, ExecResult, ProbeResult
-from app.sandbox.interface import Sandbox
+from app.packages import dist_for_import, normalize
 
 logger = logging.getLogger(__name__)
 
@@ -461,7 +462,7 @@ def search_evidence(
     cache: DocCache,
 ) -> list[EvidenceItem]:
     """Tavily search limited to the docs domain. Empty without an API key."""
-    if not settings.tavily_api_key:
+    if not settings.tavily_api_key.get_secret_value():
         return []
     try:
         full_query = " ".join(part for part in (package, installed, query) if part)
@@ -474,7 +475,7 @@ def search_evidence(
             response = client.post(
                 TAVILY_URL,
                 json=payload,
-                headers={"Authorization": f"Bearer {settings.tavily_api_key}"},
+                headers={"Authorization": f"Bearer {settings.tavily_api_key.get_secret_value()}"},
                 timeout=FETCH_TIMEOUT,
             )
             response.raise_for_status()
@@ -497,10 +498,6 @@ def search_evidence(
 
 
 # Gathering
-
-
-def _norm(name: str) -> str:
-    return re.sub(r"[-_.]+", "-", name).lower()
 
 
 def _error_packages(error: ErrorInfo, module_names: list[str]) -> list[str]:
@@ -543,7 +540,7 @@ def _probe_item(probe_id: str, target: str, name: str, reply: ProbeResult) -> Ev
 def gather(
     code: str,
     result: ExecResult,
-    sandbox: Sandbox,
+    probe: Callable[[str, str, str], ProbeResult | None],
     versions: dict[str, str],
     attempt: int,
     settings: Settings,
@@ -580,7 +577,9 @@ def gather(
     for n, (target, name) in enumerate(pairs, start=1):
         probe_id = f"p{n}"
         try:
-            reply = sandbox.probe(probe_id, target, name)
+            reply = probe(probe_id, target, name)
+            if reply is None:
+                continue
         except Exception as exc:
             logger.debug("probe %s failed: %s", probe_id, exc)
             continue
@@ -590,12 +589,12 @@ def gather(
 
     packages: dict[str, str | None] = {}
     for package, version in probe_packages:
-        packages.setdefault(package, version)
+        packages.setdefault(dist_for_import(package), version)
     if not packages:
         modules = [w.module for w in result.warnings]
         for package in _error_packages(error, modules):
-            packages.setdefault(package, None)
-    known = {_norm(k): v for k, v in versions.items()}
+            packages.setdefault(dist_for_import(package), None)
+    known = {normalize(k): v for k, v in versions.items()}
     names = [name for _, name in pairs]
     if not names:
         match = _RE_ATTR.search(error.message) or _RE_KWARG.search(error.message)
@@ -604,7 +603,7 @@ def gather(
     docs_domain: str | None = None
     search_target: tuple[str, str | None] | None = None
     for package, probe_version in packages.items():
-        installed = known.get(_norm(package)) or probe_version
+        installed = known.get(normalize(package)) or probe_version
         items.extend(changelog_evidence(package, installed, names, client, cache))
         if search_target is None:
             search_target = (package, installed)

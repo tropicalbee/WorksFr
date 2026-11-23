@@ -26,6 +26,11 @@ NAMES = sorted(
 EXTRA_PACKAGES = {"openai_tds": ["sk"]}
 
 
+@pytest.fixture(autouse=True)
+def public_resolver(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.extract.fetch.resolve_host", lambda host: ["93.184.216.34"])
+
+
 def _fixture_file(name: str) -> Path:
     matches = [p for p in FIXTURES.glob(f"{name}.*") if not p.name.endswith(".expected.json")]
     assert len(matches) == 1, f"expected one data file for {name}, found {matches}"

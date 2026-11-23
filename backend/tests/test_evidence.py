@@ -427,7 +427,14 @@ def test_gather_order_attempt_1_has_no_search() -> None:
     net = Net()
     sb = FakeSandbox()
     ev = gather(
-        CODE, failing_result(), sb, {"widget": "2.1.0"}, 1, settings(), net.client(), MemCache()
+        CODE,
+        failing_result(),
+        sb.probe,
+        {"widget": "2.1.0"},
+        1,
+        settings(),
+        net.client(),
+        MemCache(),
     )
     sources = [i.source for i in ev.items]
     assert sources[0] == "error"
@@ -448,7 +455,7 @@ def test_gather_attempt_2_adds_search_last() -> None:
     ev = gather(
         CODE,
         failing_result(),
-        FakeSandbox(),
+        FakeSandbox().probe,
         {"widget": "2.1.0"},
         2,
         settings(),
@@ -463,7 +470,9 @@ def test_gather_attempt_2_adds_search_last() -> None:
 
 def test_gather_without_error_returns_empty() -> None:
     result = ExecResult(id="s1", status="ok")
-    ev = gather("x = 1", result, FakeSandbox(), {}, 1, settings(""), Net().client(), MemCache())
+    ev = gather(
+        "x = 1", result, FakeSandbox().probe, {}, 1, settings(""), Net().client(), MemCache()
+    )
     assert ev.items == []
 
 
@@ -475,7 +484,7 @@ def test_gather_survives_sandbox_probe_failure() -> None:
     ev = gather(
         CODE,
         failing_result(),
-        Boom(),
+        Boom().probe,
         {"widget": "2.1.0"},
         1,
         settings(""),
@@ -536,7 +545,7 @@ def test_gather_passes_context_code() -> None:
     gather(
         "Adam(lr=1)\n",
         result,
-        sb,
+        sb.probe,
         {},
         1,
         settings(""),

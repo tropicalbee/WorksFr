@@ -1,4 +1,4 @@
-from app.models import ErrorInfo, Label, Score, StepKind, StepReport
+from app.models import ErrorInfo, Label, PatchVerdict, Score, StepKind, StepReport
 from app.score import compute_score
 
 
@@ -9,7 +9,7 @@ def step(idx: int, label: Label | None, fixed: bool = False) -> StepReport:
         original_code="x",
         final_code="x",
         label=label,
-        fixed=fixed,
+        verdict=PatchVerdict.FIXED if fixed else None,
         error=ErrorInfo(type="E", message="m") if label == Label.BROKEN else None,
     )
 
@@ -54,3 +54,12 @@ def test_fixed_counts_only_broken_and_stays_in_broken():
     assert score.fixed == 2
     assert score.works == 1
     assert score.cant_verify == 1
+
+
+def test_unverified_verdict_count() -> None:
+    item = step(0, Label.BROKEN)
+    item.verdict = PatchVerdict.FIXED_UNVERIFIED
+    score = compute_score([item])
+    assert score.fixed == 0
+    assert score.fixed_unverified == 1
+    assert score.broken == 1

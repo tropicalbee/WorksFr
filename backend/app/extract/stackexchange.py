@@ -6,6 +6,7 @@ api.stackexchange.com. Code comes from the answer's `body` HTML, the date from
 """
 
 import html
+import json
 from datetime import UTC, date, datetime
 from typing import Any
 
@@ -13,6 +14,7 @@ import httpx
 
 from app.extract.blocks import build_blocks
 from app.extract.errors import ExtractionError
+from app.extract.fetch import fetch_url
 from app.extract.html_page import parse_html_blocks
 from app.extract.libs import detect_packages
 from app.models import DateSource, Extraction, SourceFormat, SourceKind
@@ -24,9 +26,11 @@ _SITE = "stackoverflow"
 def _api_get(client: httpx.Client, path: str, **params: str) -> list[dict[str, Any]]:
     url = f"{API_BASE}{path}"
     try:
-        response = client.get(url, params={"site": _SITE, **params})
-        response.raise_for_status()
-        payload = response.json()
+        request = client.build_request("GET", url, params={"site": _SITE, **params})
+        status, data = fetch_url(client, str(request.url))
+        if status >= 400:
+            raise ExtractionError(f"Stack Exchange API returned HTTP {status} for {path}")
+        payload = json.loads(data)
     except httpx.HTTPStatusError as exc:
         raise ExtractionError(
             f"Stack Exchange API returned HTTP {exc.response.status_code} for {path}"
