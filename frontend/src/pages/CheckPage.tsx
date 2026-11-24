@@ -20,7 +20,7 @@ function RateLimitCountdown({ endsAt }: { endsAt: number }) {
   if (seconds === 0) return null
 
   return (
-    <div className="quiet mb-6 text-[13px] lg:ml-[208px]">
+    <div className="quiet mb-6 text-[13px] lg:ml-52">
       Waiting {seconds} s for the AI provider&apos;s rate limit
     </div>
   )

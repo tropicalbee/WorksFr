@@ -20,6 +20,16 @@ WorksFr does not judge the tutorial. An old tutorial can still teach well after 
 
 The sandbox decides, not the LLM. A step counts as running only after a real run, and a replacement line is shown only after it ran. Steps that can't be checked honestly (an API key, a GPU, network access, a local file) are labeled "Can't verify" with the reason, never guessed.
 
+### Why use WorksFr instead of asking an LLM
+
+- An LLM answers from memory and can't tell whether code works with today's library versions. WorksFr runs every step with today's libraries and shows what happened.
+- An LLM can invent a fix or an API that doesn't exist and still sound sure. WorksFr shows a fix only after it has run without an error.
+- Beginners don't know what to ask. They find the broken step when they reach it, often an hour in. WorksFr checks the whole tutorial before they start.
+- WorksFr says when it can't tell. Steps that need an API key or a GPU are labeled "Can't verify" with the reason.
+- Its fixes come with evidence. The repair uses the library's own error messages and changelogs, so the learner sees why the code changed.
+
+Pitch line: "ChatGPT tells you what it thinks will work. WorksFr shows you what actually ran today."
+
 ## Operating Context
 
 - Input is a pasted link or an uploaded `.ipynb`.

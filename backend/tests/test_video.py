@@ -198,6 +198,50 @@ def test_two_chunks_then_end_marker_and_cross_boundary_growth(settings: Settings
     assert result.blocks[0].video_timestamp == 302
 
 
+def test_interactions_past_end_reply_ends_the_video(settings: Settings) -> None:
+    # The exact reply Gemini's Interactions API gave for a chunk past the end (2026-11-25).
+    past_end = {
+        "error": {
+            "message": "Unable to process input: the file or media data is empty, "
+            "corrupted, or malformed.",
+            "code": "invalid_request",
+        }
+    }
+    replies = iter(
+        [
+            httpx.Response(200, json=reply([block("x = 1", at=10)])),
+            httpx.Response(400, json=past_end),
+        ]
+    )
+
+    with httpx.Client(transport=httpx.MockTransport(lambda _: next(replies))) as http:
+        result = extract_video(URL, settings, http)
+    assert [item.code for item in result.blocks] == ["x = 1"]
+
+
+def test_busy_model_is_retried_after_short_waits(settings: Settings) -> None:
+    replies = iter(
+        [
+            httpx.Response(503, json={"error": {"code": "unavailable"}}),
+            httpx.Response(503, json={"error": {"code": "unavailable"}}),
+            httpx.Response(200, json=reply([block("x = 1", at=10)])),
+            end_marker(),
+        ]
+    )
+    sleeps: list[float] = []
+
+    with httpx.Client(transport=httpx.MockTransport(lambda _: next(replies))) as http:
+        result = VideoReader(settings, http, sleep=sleeps.append).extract(URL)
+    assert [item.code for item in result.blocks] == ["x = 1"]
+    assert 5.0 in sleeps and 15.0 in sleeps
+
+
+def test_model_busy_after_every_retry_still_fails(settings: Settings) -> None:
+    with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(503))) as http:
+        with pytest.raises(ExtractionError, match="HTTP 503"):
+            VideoReader(settings, http, sleep=lambda _: None).extract(URL)
+
+
 def test_repeated_code_across_boundary_is_kept_once(settings: Settings) -> None:
     replies = iter(
         [

@@ -35,7 +35,7 @@ export function ReportView({
       <ReportHeader report={report} blocks={ordered} sample={sample} />
       {notice}
       {report.status === 'failed' && (
-        <p className="metadata mb-6 lg:ml-[208px]" role="alert">
+        <p className="metadata mb-6 lg:ml-52" role="alert">
           {report.error || 'The check failed without an error message.'}
         </p>
       )}

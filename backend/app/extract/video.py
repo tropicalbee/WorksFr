@@ -25,6 +25,8 @@ PRIVATE_VIDEO = (
 )
 NO_CODE = "No code was visible in this video."
 QUOTA_EXCEEDED = "The video reader's quota is used up for now. Try again later."
+_BUSY_STATUSES = (500, 502, 503, 504)
+_BUSY_WAITS = (5.0, 15.0)
 
 _KEY_PATTERN = re.compile(
     r"\b(?:sk-[A-Za-z0-9_-]{20,}|AIza[A-Za-z0-9_-]{30,}|"
@@ -246,6 +248,7 @@ class VideoReader:
         key = settings.video_reader_api_key.get_secret_value()
         prompt = PROMPT
         retried_rate_limit = False
+        busy_retries = 0
         for attempt in range(2):
             while True:
                 pace(self._pacing, on_wait, self._sleep, self._monotonic)
@@ -261,6 +264,11 @@ class VideoReader:
                     raise ExtractionError(
                         f"The video reader request failed ({type(exc).__name__})."
                     ) from None
+                if response.status_code in _BUSY_STATUSES and busy_retries < len(_BUSY_WAITS):
+                    # The model is briefly overloaded; a short wait usually clears it.
+                    wait("video", _BUSY_WAITS[busy_retries], on_wait, self._sleep)
+                    busy_retries += 1
+                    continue
                 if response.status_code != 429:
                     break
                 seconds = retry_after(response.headers.get("Retry-After", ""))
@@ -273,7 +281,11 @@ class VideoReader:
             if response.status_code == 400:
                 try:
                     error = response.json().get("error", {})
-                    is_end = isinstance(error, dict) and error.get("status") == "INVALID_ARGUMENT"
+                    # Past the end of the video. The Interactions API sends `code`, not `status`.
+                    is_end = isinstance(error, dict) and (
+                        error.get("status") == "INVALID_ARGUMENT"
+                        or error.get("code") == "invalid_request"
+                    )
                 except (ValueError, AttributeError):
                     is_end = False
                 if is_end:
