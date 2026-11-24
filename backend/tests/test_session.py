@@ -4,16 +4,16 @@ import pytest
 from support.local_sandbox import LocalRunnerSandbox
 
 from app.config import Settings
-from app.models import Block, ErrorInfo, ExecResult, Label, RepairAttempt, StepKind
-from app.sandbox.interface import SandboxError
+from app.models import Block, Environment, ErrorInfo, ExecResult, Label, RepairAttempt, StepKind
+from app.sandbox.interface import SandboxError, StepTimeoutError
 from app.session import CheckSession, CheckTimeoutError
 from app.step import Step
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def step(idx: int, code: str) -> Step:
-    return Step(Block(idx=idx, kind=StepKind.PYTHON, code=code, runnable_code=code))
+def step(idx: int, code: str, kind: StepKind = StepKind.PYTHON) -> Step:
+    return Step(Block(idx=idx, kind=kind, code=code, runnable_code=code))
 
 
 @pytest.fixture
@@ -76,12 +76,10 @@ def test_failed_patch_reset_and_cascade(session: CheckSession) -> None:
 
 def test_deadline_and_protocol_failure() -> None:
     class Fake:
-        def start(self, packages):
-            from app.models import Environment
-
+        def start(self, packages: list[str], npm_packages: list[str] | None = None) -> Environment:
             return Environment()
 
-        def exec(self, step_id, code):
+        def exec(self, step_id: str, code: str, *, lang: str = "python") -> ExecResult:
             return ExecResult(
                 id=step_id, status="error", error=ErrorInfo(type="ProtocolError", message="bad")
             )
@@ -98,6 +96,96 @@ def test_deadline_and_protocol_failure() -> None:
         with pytest.raises(CheckTimeoutError):
             session.run(step(1, "42"))
         assert session.probe("json", "dump") is None
+
+
+def test_replay_carries_kinds_and_prechecks_do_not_run() -> None:
+    class MixedSandbox:
+        requests: list[tuple[str, str, str]] = []
+        replays: list[list[tuple[StepKind, str]]] = []
+
+        def start(self, packages: list[str], npm_packages: list[str] | None = None) -> Environment:
+            assert packages == ["pandas"]
+            assert npm_packages == ["example"]
+            return Environment(failed_npm_packages=["example"])
+
+        def exec(self, step_id: str, code: str, *, lang: str = "python") -> ExecResult:
+            self.requests.append((step_id, code, lang))
+            if step_id == "s6":
+                raise StepTimeoutError("timed out")
+            if step_id == "s3":
+                return ExecResult(
+                    id=step_id,
+                    status="error",
+                    error=ErrorInfo(type="Error", message="Cannot find module 'example'"),
+                )
+            if step_id == "s5":
+                return ExecResult(
+                    id=step_id, status="error", error=ErrorInfo(type="ExitStatus", message="exit 1")
+                )
+            return ExecResult(id=step_id, status="ok")
+
+        def restart(self, replay: list[tuple[StepKind, str]]) -> None:
+            self.replays.append(replay)
+
+        def close(self) -> None:
+            pass
+
+    sandbox = MixedSandbox()
+    with CheckSession(
+        sandbox, Settings(_env_file=None), c_system_headers=["curl/curl.h"]
+    ) as session:
+        session.start(["pandas"], ["example"])
+        assert session.run(step(0, "const x = 1;", StepKind.JAVASCRIPT)).label == Label.WORKS
+        assert session.run(step(1, "x = 2", StepKind.REPL)).label == Label.WORKS
+        header = session.run(step(2, "#include <curl/curl.h>", StepKind.C))
+        assert header.reason == "needs the system library curl/curl.h"
+        missing = session.run(step(3, "require('example')", StepKind.JAVASCRIPT))
+        assert missing.reason == "example didn't install in the sandbox, so this step couldn't run."
+        assert session.run(step(4, "int f(void) { return 1; }", StepKind.C)).label == Label.WORKS
+        assert session.run(step(5, "int main() { return f(); }", StepKind.C)).label == Label.BROKEN
+        timeout = session.run(step(6, "while (true) {}", StepKind.TYPESCRIPT))
+        assert timeout.label == Label.CANT_VERIFY
+    assert sandbox.requests == [
+        ("s0", "const x = 1;", "javascript"),
+        ("s1", "x = 2", "python"),
+        ("s3", "require('example')", "javascript"),
+        ("s4", "int f(void) { return 1; }", "c"),
+        ("s5", "int main() { return f(); }", "c"),
+        ("s6", "while (true) {}", "typescript"),
+    ]
+    assert sandbox.replays == [
+        [
+            (StepKind.JAVASCRIPT, "const x = 1;"),
+            (StepKind.REPL, "x = 2"),
+            (StepKind.C, "int f(void) { return 1; }"),
+        ]
+    ]
+
+
+def test_cascade_only_runs_for_python_kinds() -> None:
+    class FailingSandbox:
+        def start(self, packages: list[str], npm_packages: list[str] | None = None) -> Environment:
+            return Environment()
+
+        def exec(self, step_id: str, code: str, *, lang: str = "python") -> ExecResult:
+            return ExecResult(
+                id=step_id,
+                status="error",
+                error=ErrorInfo(type="NameError", message="name 'value' is not defined"),
+            )
+
+        def close(self) -> None:
+            pass
+
+    with CheckSession(FailingSandbox(), Settings(_env_file=None)) as session:
+        session.start([])
+        session.run(step(0, "value = missing()", StepKind.JAVASCRIPT))
+        decision = session.run(step(1, "print(value)"))
+        assert decision.reason == "NameError: name 'value' is not defined"
+        session.run(step(2, "value = missing()"))
+        decision = session.run(step(3, "value", StepKind.JAVASCRIPT))
+        assert decision.reason == "NameError: name 'value' is not defined"
+        assert session.run(step(4, "value")).reason == "depends on step 3, which is still broken"
 
 
 @pytest.mark.parametrize(

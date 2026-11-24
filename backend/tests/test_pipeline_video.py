@@ -50,10 +50,10 @@ class FakeSandbox:
         self.codes: list[str] = []
         self.closed = False
 
-    def start(self, packages: list[str]) -> Environment:
+    def start(self, packages: list[str], npm_packages: list[str] | None = None) -> Environment:
         return Environment(versions={package: "1.0" for package in packages})
 
-    def exec(self, step_id: str, code: str) -> ExecResult:
+    def exec(self, step_id: str, code: str, *, lang: str = "python") -> ExecResult:
         self.codes.append(code)
         return ExecResult(
             id=step_id,

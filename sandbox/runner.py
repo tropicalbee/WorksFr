@@ -11,19 +11,45 @@ import json
 import os
 import pkgutil
 import platform
+import re
+import signal
+import subprocess
 import sys
 import tempfile
 import time
 import traceback
+import uuid
 import warnings
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any, TextIO
+from pathlib import Path
+from typing import Any, BinaryIO, TextIO
 
 OUTPUT_LIMIT = 64 * 1024
 RESULT_LIMIT = 8 * 1024
+MAX_REPLY_BYTES = 1024 * 1024
 TRUNCATION = b"\n[truncated]"
 RUNNER_PATH = __file__
+EXEC_LANGUAGES = ("python", "javascript", "typescript", "c", "cpp")
+SOURCE_TOKENS = re.compile(
+    r"""//[^\r\n]*|/\*[\s\S]*?\*/|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|`(?:\\[\s\S]|[^`\\])*`"""
+)
+JS_MODULE_DECLARATION = re.compile(
+    r"""(?:^|[;\r\n])\s*(?:import\s*(?:['"{*]|\.\s*meta\b)|import\s+[$\w]|export(?:\s*[{*]|\s+[$\w]))"""
+)
+NODE_ERROR = re.compile(r"^(\w*Error|\w*Exception)(?: \[([A-Z_0-9]+)\])?: (.*)$", re.MULTILINE)
+NODE_DEPRECATION = re.compile(r"^\(node:\d+\) \[DEP\d+\] DeprecationWarning: (.*)$", re.MULTILINE)
+TSX_REDECLARATION = re.compile(
+    r'^.*\.[cm]ts:\d+:\d+: ERROR: The symbol ".*" has already been declared$', re.MULTILINE
+)
+C_MAIN = re.compile(r"\bmain\s*\([^();{}]*\)\s*(?:->\s*int\s*)?\{")
+C_PREAMBLE = re.compile(r"^\s*#\s*(?:include|define)\b")
+COMPILER_ERROR = re.compile(r"^(?:.*?: )?(?:fatal )?error:.*$", re.MULTILINE)
+COMPILER_REDECLARATION = re.compile(
+    r"^(?:.*?: )?(?:error|note): "
+    r"(?:redefinition of|conflicting types for|previous definition of)\b",
+    re.MULTILINE,
+)
 
 
 class StdinUnavailableError(Exception):
@@ -47,6 +73,146 @@ def limited_text(data: bytes, limit: int) -> str:
     if len(text.encode("utf-8")) > limit:
         return limited_text(text.encode("utf-8"), limit)
     return text
+
+
+def output_after_marker(stream: BinaryIO, marker: bytes) -> tuple[bytes, bool]:
+    stream.seek(0)
+    tail = b""
+    while chunk := stream.read(OUTPUT_LIMIT):
+        data = tail + chunk
+        index = data.find(marker)
+        if index >= 0:
+            stream.seek(stream.tell() - (len(data) - index - len(marker)))
+            return stream.read(OUTPUT_LIMIT + 1), True
+        tail = data[-(len(marker) - 1) :] if len(marker) > 1 else b""
+    stream.seek(0)
+    return stream.read(OUTPUT_LIMIT + 1), False
+
+
+def mask_comments_and_strings(code: str) -> str:
+    def mask(match: re.Match[str]) -> str:
+        token = match[0]
+        lines = "\n" * token.count("\n")
+        if token.startswith("/"):
+            return " " + lines
+        return token[0] + lines + token[0]
+
+    return SOURCE_TOKENS.sub(mask, code)
+
+
+def node_extension(code: str, typescript: bool) -> str:
+    module = JS_MODULE_DECLARATION.search(mask_comments_and_strings(code))
+    if typescript:
+        return ".mts" if module else ".cts"
+    return ".mjs" if module else ".cjs"
+
+
+def node_error(stderr: str, returncode: int, traceback_text: str) -> dict[str, str]:
+    if matches := list(NODE_ERROR.finditer(stderr)):
+        category, code, message = matches[-1].groups()
+        return {
+            "type": code if code == "ERR_MODULE_NOT_FOUND" else category,
+            "message": message,
+            "traceback": traceback_text,
+        }
+    return exit_status(returncode, traceback_text)
+
+
+def node_redeclaration(error: dict[str, str]) -> bool:
+    message = error["message"]
+    if error["type"] == "SyntaxError":
+        return message.startswith("Identifier ") and message.endswith(" has already been declared")
+    return (
+        error["type"] == "Error"
+        and message.startswith("Transform failed with ")
+        and TSX_REDECLARATION.search(error["traceback"]) is not None
+    )
+
+
+def deprecation(message: str, filename: str, lineno: int | None) -> dict[str, Any]:
+    return {
+        "category": "DeprecationWarning",
+        "message": message,
+        "filename": filename,
+        "lineno": lineno,
+        "module": "__step__",
+    }
+
+
+def node_warnings(
+    stderr: str, source_name: str, current_start: int, filename: str
+) -> list[dict[str, Any]]:
+    location = re.compile(rf"{re.escape(source_name)}:(\d+):\d+")
+    records = []
+    # Node can print warnings on the next tick, after the history marker has been written.
+    blocks = re.split(r"(?m)(?=^\(node:\d+\) )", stderr)
+    for block in blocks:
+        if not (match := NODE_DEPRECATION.match(block)):
+            continue
+        stack_lines = [int(item[1]) for item in location.finditer(block, match.end())]
+        current = next((line for line in stack_lines if line >= current_start), None)
+        if current is not None:
+            records.append(deprecation(match[1], filename, current - current_start + 1))
+        elif not stack_lines:
+            records.append(deprecation(match[1], filename, None))
+    return records
+
+
+def compiler_error(stderr: str, returncode: int) -> dict[str, str]:
+    match = COMPILER_ERROR.search(stderr)
+    message = match[0] if match else f"Compiler exited with status {returncode}"
+    return {"type": "CompileError", "message": message, "traceback": stderr}
+
+
+def compiler_redeclaration(stderr: str) -> bool:
+    return COMPILER_REDECLARATION.search(stderr) is not None
+
+
+def compiler_warnings(stderr: str, source_name: str, filename: str) -> list[dict[str, Any]]:
+    diagnostic = re.compile(
+        rf"^{re.escape(source_name)}:(\d+):(?:\d+:)? warning: (.*) \[-Wdeprecated-declarations\]$",
+        re.MULTILINE,
+    )
+    return [deprecation(match[2], filename, int(match[1])) for match in diagnostic.finditer(stderr)]
+
+
+def wrap_c_main(code: str, source_name: str) -> str:
+    preamble, body = [], []
+    continued = False
+    masked = mask_comments_and_strings(code)
+    for line, masked_line in zip(code.split("\n"), masked.split("\n"), strict=True):
+        directive = continued or C_PREAMBLE.match(masked_line)
+        preamble.append(line if directive else "")
+        body.append("" if directive else line)
+        continued = bool(directive) and line.rstrip().endswith("\\")
+    line_directive = f'#line 1 "{source_name}"\n'
+    includes_and_defines = "\n".join(preamble)
+    statements = "\n".join(body)
+    return (
+        f"{line_directive}{includes_and_defines}\n"
+        "int main(void) {\n"
+        f"{line_directive}{statements}\n}}\n"
+    )
+
+
+def exit_status(returncode: int, stderr: str) -> dict[str, str]:
+    return {
+        "type": "ExitStatus",
+        "message": f"Process exited with status {returncode}",
+        "traceback": stderr,
+    }
+
+
+def native_run_error(returncode: int, stderr: str) -> dict[str, str] | None:
+    if returncode == 0:
+        return None
+    if returncode > 0:
+        return exit_status(returncode, stderr)
+    try:
+        name = signal.Signals(-returncode).name
+    except ValueError:
+        name = f"signal {-returncode}"
+    return {"type": "Signal", "message": name, "traceback": stderr}
 
 
 def safe_string(value: object) -> str:
@@ -118,6 +284,22 @@ class Capture:
             closefd=False,
         )
 
+    def reset(self) -> None:
+        for capture in (self.stdout, self.stderr):
+            capture.seek(0)
+            capture.truncate(0)
+
+    def run_child(self, args: list[str], workdir: Path) -> int:
+        self.reset()
+        return subprocess.run(
+            args,
+            cwd=workdir,
+            stdin=subprocess.DEVNULL,
+            stdout=self.stdout,
+            stderr=self.stderr,
+            check=False,
+        ).returncode
+
     @contextmanager
     def redirected(self) -> Iterator[None]:
         streams = (sys.stdin, sys.stdout, sys.stderr, sys.__stdin__, sys.__stdout__, sys.__stderr__)
@@ -126,9 +308,7 @@ class Capture:
         flush_quietly(sys.stderr)
         saved_fds = [os.dup(fd) for fd in (0, 1, 2)]
         try:
-            for capture in (self.stdout, self.stderr):
-                capture.seek(0)
-                capture.truncate(0)
+            self.reset()
             os.dup2(self.empty_input.fileno(), 0)
             os.dup2(self.stdout.fileno(), 1)
             os.dup2(self.stderr.fileno(), 2)
@@ -209,6 +389,140 @@ def execute(request: dict[str, Any], namespace: dict[str, Any], capture: Capture
         "error": error,
         "duration_ms": round((time.monotonic() - started) * 1000),
     }
+
+
+class ChildExecutor:
+    def __init__(self, workdir: Path, capture: Capture) -> None:
+        self.workdir = workdir
+        self.capture = capture
+        self.node_history: list[tuple[str, str]] = []
+        self.native_history: dict[str, list[tuple[str, bool]]] = {"c": [], "cpp": []}
+
+    def execute(self, request: dict[str, Any], lang: str) -> dict[str, Any]:
+        started = time.monotonic()
+        filename = f"<step-{request.get('id')}>"
+        code = request["code"]
+        if lang in self.native_history:
+            stdout, stderr, records, error = self.run_native(
+                code, lang, filename, self.native_history[lang]
+            )
+        else:
+            stdout, stderr, records, error = self.run_node(code, lang, filename, self.node_history)
+        return {
+            "id": request.get("id"),
+            "status": "error" if error else "ok",
+            "stdout": stdout,
+            "stderr": stderr,
+            "result": None,
+            "warnings": records,
+            "error": error,
+            "duration_ms": round((time.monotonic() - started) * 1000),
+        }
+
+    def run_node(
+        self, code: str, lang: str, filename: str, history: list[tuple[str, str]]
+    ) -> tuple[str, str, list[dict[str, Any]], dict[str, str] | None]:
+        prefix = "".join(f"{previous}\n;\n" for _, previous in history)
+        current_start = prefix.count("\n") + 2
+        typescript = lang == "typescript" or any(kind == "typescript" for kind, _ in history)
+        source = self.source_path(node_extension(prefix + code, typescript))
+        marker = f"worksfr-{uuid.uuid4().hex}\n"
+        marker_literal = json.dumps(marker)
+        boundary = (
+            f"globalThis.process.stdout.write({marker_literal}); "
+            f"globalThis.process.stderr.write({marker_literal});\n"
+        )
+        self.write_source(source, prefix + boundary + code)
+        returncode = self.capture.run_child(
+            ["tsx" if typescript else "node", "--trace-deprecation", str(source)], self.workdir
+        )
+        out, _ = output_after_marker(self.capture.stdout, marker.encode("ascii"))
+        err, marked = output_after_marker(self.capture.stderr, marker.encode("ascii"))
+        stdout = limited_text(out, OUTPUT_LIMIT)
+        stderr = limited_text(err, OUTPUT_LIMIT)
+        records = node_warnings(stderr, source.name, current_start, filename) if marked else []
+        error = None
+        if returncode:
+            _, full_stderr = self.capture.read()
+            error = node_error(stderr, returncode, full_stderr)
+            if history and not marked and node_redeclaration(error):
+                isolated_history: list[tuple[str, str]] = []
+                result = self.run_node(code, lang, filename, isolated_history)
+                if isolated_history:
+                    history[:] = isolated_history
+                return result
+        elif marked:
+            history.append((lang, code))
+        else:
+            error = {
+                "type": "ExitStatus",
+                "message": "Node exited before the current step ran",
+                "traceback": stderr,
+            }
+        return stdout, stderr, records, error
+
+    def run_native(
+        self, code: str, lang: str, filename: str, history: list[tuple[str, bool]]
+    ) -> tuple[str, str, list[dict[str, Any]], dict[str, str] | None]:
+        compiler, standard, suffix = (
+            ("gcc", "-std=c17", ".c") if lang == "c" else ("g++", "-std=c++20", ".cpp")
+        )
+        parts = []
+        for index, (previous, has_main) in enumerate(history):
+            # Keep definitions from earlier programs while reserving the entry point for this step.
+            if has_main:
+                previous = f"#define main worksfr_previous_main_{index}\n{previous}\n#undef main\n"
+            parts.append(previous)
+        prefix = "\n".join(parts)
+        has_main = bool(C_MAIN.search(mask_comments_and_strings(code)))
+        source = self.source_path(suffix)
+        current = f'#line 1 "{source.name}"\n{code}\n'
+        self.write_source(source, f"{prefix}\n{current}")
+        target = source.with_suffix(".out" if has_main else ".o")
+        args = [compiler, standard, "-Wall"]
+        if not has_main:
+            args.append("-c")
+        returncode = self.capture.run_child([*args, str(source), "-o", str(target)], self.workdir)
+        stdout, stderr = self.capture.read()
+        # Wrapping can hide a conflict by moving the declaration into a local scope.
+        redeclared = returncode != 0 and bool(history) and compiler_redeclaration(stderr)
+        if returncode and not has_main and not redeclared:
+            has_main = True
+            source = self.source_path(suffix)
+            target = source.with_suffix(".out")
+            current = wrap_c_main(code, source.name)
+            self.write_source(source, f"{prefix}\n{current}")
+            returncode = self.capture.run_child(
+                [compiler, standard, "-Wall", str(source), "-o", str(target)], self.workdir
+            )
+            stdout, stderr = self.capture.read()
+            redeclared = returncode != 0 and bool(history) and compiler_redeclaration(stderr)
+        if redeclared:
+            isolated_history: list[tuple[str, bool]] = []
+            result = self.run_native(code, lang, filename, isolated_history)
+            if isolated_history:
+                history[:] = isolated_history
+            return result
+        records = compiler_warnings(stderr, source.name, filename)
+        if returncode:
+            return stdout, stderr, records, compiler_error(stderr, returncode)
+        if has_main:
+            returncode = self.capture.run_child([str(target)], self.workdir)
+            run_stdout, run_stderr = self.capture.read()
+            stdout = limited_text((stdout + run_stdout).encode("utf-8"), OUTPUT_LIMIT)
+            stderr = limited_text((stderr + run_stderr).encode("utf-8"), OUTPUT_LIMIT)
+            if error := native_run_error(returncode, stderr):
+                return stdout, stderr, records, error
+        history.append((current, has_main))
+        return stdout, stderr, records, None
+
+    def source_path(self, suffix: str) -> Path:
+        return self.workdir / f"worksfr-{uuid.uuid4().hex}{suffix}"
+
+    @staticmethod
+    def write_source(path: Path, code: str) -> None:
+        with path.open("x", encoding="utf-8", newline="\n") as source:
+            source.write(code)
 
 
 def resolve_target(target: str, namespace: dict[str, Any]) -> Any:
@@ -313,11 +627,39 @@ def validate(request: Any) -> dict[str, Any]:
     for field in fields:
         if not isinstance(request.get(field), str):
             raise ProtocolError(f"{field} must be a string")
+    if op == "exec" and request.get("lang", "python") not in EXEC_LANGUAGES:
+        raise ProtocolError("lang must be python, javascript, typescript, c or cpp")
     return request
 
 
-def send(protocol_fd: int, reply: dict[str, Any]) -> None:
+def encode_reply(reply: dict[str, Any], *, child: bool = False) -> bytes:
     data = (json.dumps(reply, ensure_ascii=True) + "\n").encode("utf-8")
+    if not child or len(data) <= MAX_REPLY_BYTES:
+        return data
+
+    # JSON can expand control characters sixfold, and warning fields repeat parts of stderr.
+    shortened = dict(reply)
+    for field in ("stdout", "stderr"):
+        if field in reply:
+            shortened[field] = limited_text(reply[field].encode("utf-8"), OUTPUT_LIMIT // 2)
+    if error := reply.get("error"):
+        shortened["error"] = {
+            field: limited_text(
+                value.encode("utf-8", errors="replace"),
+                OUTPUT_LIMIT // 2 if field == "traceback" else RESULT_LIMIT,
+            )
+            for field, value in error.items()
+        }
+    if records := reply.get("warnings"):
+        first = records[0]
+        shortened["warnings"] = [
+            {**first, "message": limited_text(first["message"].encode("utf-8"), RESULT_LIMIT)}
+        ]
+    return (json.dumps(shortened, ensure_ascii=True) + "\n").encode("utf-8")
+
+
+def send(protocol_fd: int, reply: dict[str, Any], *, child: bool = False) -> None:
+    data = encode_reply(reply, child=child)
     while data:
         written = os.write(protocol_fd, data)
         data = data[written:]
@@ -334,10 +676,12 @@ def main() -> None:
     requests = sys.stdin
     namespace: dict[str, Any] = {"__name__": "__main__", "__builtins__": builtins}
     capture = Capture()
+    children = ChildExecutor(Path.cwd(), capture)
     try:
         send(protocol_fd, {"op": "ready", "python": platform.python_version()})
         for line in requests:
             request: Any = None
+            child = False
             try:
                 try:
                     request = json.loads(line)
@@ -345,7 +689,12 @@ def main() -> None:
                     raise ProtocolError(f"Invalid JSON: {exc}") from None
                 validate(request)
                 if request["op"] == "exec":
-                    reply = execute(request, namespace, capture)
+                    lang = request.get("lang", "python")
+                    if lang == "python":
+                        reply = execute(request, namespace, capture)
+                    else:
+                        child = True
+                        reply = children.execute(request, lang)
                 else:
                     reply = probe(request, namespace, capture)
             except BaseException as exc:
@@ -354,7 +703,7 @@ def main() -> None:
                     "status": "error",
                     "error": exception_details(exc),
                 }
-            send(protocol_fd, reply)
+            send(protocol_fd, reply, child=child)
     finally:
         capture.close()
         os.close(protocol_fd)

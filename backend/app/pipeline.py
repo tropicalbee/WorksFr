@@ -183,7 +183,7 @@ def run_check(
         runnable = sum(is_runnable(block.kind) for block in extraction.blocks)
         if not runnable:
             raise ExtractionError(
-                "This page has code, but none of it is Python that WorksFr can run."
+                "This page has code, but none of it is code that WorksFr can run."
             )
         if extraction.source_format == SourceFormat.NOTEBOOK and runnable > deps.settings.max_steps:
             raise ExtractionError(
@@ -226,9 +226,10 @@ def run_check(
             deps.sandbox_factory(check_id),
             deps.settings,
             guessed_packages=_guessed_packages(extraction.blocks),
+            c_system_headers=extraction.c_system_headers,
             clock=deps.clock,
         ) as session:
-            environment = session.start(extraction.packages)
+            environment = session.start(extraction.packages, npm_packages=extraction.npm_packages)
             sink.emit(
                 EnvironmentEvent(
                     versions=environment.versions,
@@ -261,11 +262,13 @@ def run_check(
                             warnings=report.warnings,
                         )
                     )
-                    if not unavailable and not out_of_time:
+                    if step.is_python and not unavailable and not out_of_time:
                         context = RepairContext(
                             title=extraction.title,
                             earlier_code="\n".join(
-                                code for idx, code in session.ledger if idx != step.idx
+                                code
+                                for idx, kind, code in session.ledger
+                                if idx != step.idx and kind in (StepKind.PYTHON, StepKind.REPL)
                             ),
                             versions=environment.versions,
                             failed_packages=environment.failed_packages,
@@ -287,7 +290,7 @@ def run_check(
                         skipped_reason = "No repair was tried: every LLM provider was unavailable."
                     elif out_of_time and not step.attempts:
                         skipped_reason = "No repair was tried: the check was running out of time."
-                    if skipped_reason and decision.label == Label.BROKEN:
+                    if skipped_reason and step.is_python and decision.label == Label.BROKEN:
                         decision.reason = (
                             " ".join(filter(None, (decision.reason, skipped_reason)))
                             if step.block.low_confidence

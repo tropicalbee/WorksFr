@@ -3,7 +3,7 @@ from collections.abc import Collection
 import pytest
 
 from app.labels import label_step, precheck
-from app.models import ErrorInfo, ExecResult, Label, WarningInfo
+from app.models import ErrorInfo, ExecResult, Label, StepKind, WarningInfo
 
 
 def test_patch_verdict_requires_library_origin() -> None:
@@ -263,6 +263,117 @@ def test_precheck_negative(code):
 )
 def test_precheck_unparseable_returns_none(code):
     assert precheck(code) is None
+
+
+@pytest.mark.parametrize(
+    ("kind", "code"),
+    [
+        (StepKind.C, 'scanf("%d", &n);'),
+        (StepKind.C, "getchar();"),
+        (StepKind.C, "gets(buffer);"),
+        (StepKind.C, "fgets(buffer, sizeof(buffer), stdin);"),
+        (StepKind.CPP, "std::cin >> value;"),
+        (StepKind.JAVASCRIPT, 'const rl = require("node:readline/promises");'),
+        (StepKind.JAVASCRIPT, "import { createInterface } from 'readline';"),
+        (StepKind.TYPESCRIPT, "readline.createInterface(options);"),
+        (StepKind.TYPESCRIPT, "process /* input */ . stdin.on('data', read);"),
+        (StepKind.JAVASCRIPT, 'prompt("Name?");'),
+    ],
+)
+def test_non_python_input_prechecks(kind: StepKind, code: str) -> None:
+    decision = precheck(code, kind=kind)
+    assert decision is not None
+    assert decision.label == CANT
+    assert decision.reason == "needs keyboard input"
+
+
+@pytest.mark.parametrize(
+    ("kind", "code"),
+    [
+        (StepKind.C, 'puts("scanf( and getchar( and gets(");'),
+        (StepKind.C, "my_scanf(); has_getchar(); fgets(buffer, sizeof(buffer), file);"),
+        (StepKind.C, "/* scanf(); */ puts(text); // getchar()"),
+        (StepKind.CPP, "other_cin >> value;"),
+        (StepKind.CPP, "const auto mask = 1 << 3; // std::cin >> mask"),
+        (StepKind.JAVASCRIPT, 'console.log("readline", "process.stdin", "prompt(");'),
+        (StepKind.TYPESCRIPT, "custom_readline(); $prompt(); process.stdinBackup;"),
+        (StepKind.TYPESCRIPT, "console.log(`prompt()`); /* process.stdin */"),
+        (StepKind.TYPESCRIPT, 'import something from "readline-extra";'),
+    ],
+)
+def test_non_python_input_lookalikes_are_runnable(kind: StepKind, code: str) -> None:
+    assert precheck(code, kind=kind) is None
+
+
+@pytest.mark.parametrize("kind", [StepKind.C, StepKind.CPP])
+def test_c_system_header_precheck(kind: StepKind) -> None:
+    headers = {"curl/curl.h"}
+    decision = precheck("  # include <curl/curl.h>\n", kind=kind, c_system_headers=headers)
+    assert decision is not None
+    assert decision.label == CANT
+    assert decision.reason == "needs the system library curl/curl.h"
+    assert precheck("#include <stdio.h>", kind=kind, c_system_headers=headers) is None
+    assert precheck("/*\n#include <curl/curl.h>\n*/", kind=kind, c_system_headers=headers) is None
+
+
+@pytest.mark.parametrize("name", ["document", "window", "navigator", "localStorage", "alert"])
+def test_browser_error_requires_node_reference_to_missing_global(name: str) -> None:
+    result = err("ReferenceError", f"{name} is not defined")
+    assert label_step(result, kind=StepKind.JAVASCRIPT).reason == "runs in a web browser"
+    assert label_step(result).label == Label.BROKEN
+    assert label_step(err("TypeError", result.error.message), kind=StepKind.JAVASCRIPT).label == (
+        Label.BROKEN
+    )
+    assert (
+        label_step(
+            err("ReferenceError", f"my_{name} is not defined"), kind=StepKind.TYPESCRIPT
+        ).label
+        == Label.BROKEN
+    )
+
+
+@pytest.mark.parametrize(
+    "message", ["ENOTFOUND example.com", "connect ECONNREFUSED", "EAI_AGAIN", "fetch failed"]
+)
+def test_node_network_errors(message: str) -> None:
+    decision = label_step(err("TypeError", message), kind=StepKind.TYPESCRIPT)
+    assert decision.label == CANT
+    assert decision.reason == "needs network access"
+    near_match = label_step(err("TypeError", "fetch failedFlag"), kind=StepKind.TYPESCRIPT)
+    assert near_match.label == Label.BROKEN
+
+
+@pytest.mark.parametrize(
+    ("etype", "message", "package"),
+    [
+        ("Error", "Cannot find module 'example/subpath'", "example"),
+        (
+            "ERR_MODULE_NOT_FOUND",
+            "Cannot find package '@scope/example' imported from file",
+            "@scope/example",
+        ),
+    ],
+)
+def test_node_missing_package_requires_failed_install(
+    etype: str, message: str, package: str
+) -> None:
+    result = err(etype, message)
+    decision = label_step(result, kind=StepKind.JAVASCRIPT, failed_npm_packages=[package])
+    assert decision.label == CANT
+    assert decision.reason == f"{package} didn't install in the sandbox, so this step couldn't run."
+    assert (
+        label_step(result, kind=StepKind.JAVASCRIPT, failed_packages=[package]).label
+        == Label.BROKEN
+    )
+    local = err("Error", f"Cannot find module './{package}'")
+    decision = label_step(local, kind=StepKind.JAVASCRIPT, failed_npm_packages=[package])
+    assert decision.label == Label.BROKEN
+
+
+def test_native_compilation_error_does_not_use_python_labels() -> None:
+    result = err("CompileError", "'cuda' was not declared in this scope")
+    assert label_step(result, kind=StepKind.CPP).label == Label.BROKEN
+    assert label_step(ok("DeprecationWarning"), kind=StepKind.C).label == Label.DEPRECATED
 
 
 @pytest.mark.parametrize(

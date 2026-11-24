@@ -1,10 +1,11 @@
 """JavaScript, TypeScript, C and C++ tutorials: fences, detection, paste, packages, pins."""
 
+from unittest.mock import Mock
+
 import httpx
 import nbformat
 import pytest
-from support.local_sandbox import LocalRunnerSandbox
-from test_pipeline import ROOT, Cache, Proposer, Sink
+from test_pipeline import Cache, Proposer, Sink
 
 from app.config import Settings
 from app.extract import extract_notebook
@@ -20,9 +21,10 @@ from app.extract.libs import (
 )
 from app.extract.markdown_doc import parse_markdown
 from app.extract.paste import extract_paste
-from app.models import Block, InstallPin, StepKind, is_runnable
+from app.models import Block, Environment, ExecResult, InstallPin, Label, StepKind, is_runnable
 from app.pins import find_install_pins
 from app.pipeline import PipelineDeps, run_check
+from app.sandbox.interface import Sandbox
 
 ALIASES = [
     ("js", StepKind.JAVASCRIPT),
@@ -339,24 +341,24 @@ def test_js_only_page_is_not_rejected_as_non_python(monkeypatch: pytest.MonkeyPa
     settings = Settings(_env_file=None, providers=[])
     sink = Sink()
     body = '<pre class="language-javascript">const x = 1;</pre>'
-    started: list[str] = []
-
-    def factory(check_id: str) -> LocalRunnerSandbox:
-        started.append(check_id)
-        return LocalRunnerSandbox(settings, runner_path=ROOT / "sandbox/runner.py")
+    sandbox = Mock(spec=Sandbox)
+    sandbox.start.return_value = Environment()
+    sandbox.exec.return_value = ExecResult(id="s0", status="ok")
 
     deps = PipelineDeps(
         settings,
-        factory,
+        lambda _: sandbox,
         Proposer(),
         httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(200, text=body))),
         Cache(),
     )
     with deps.http_client:
         run_check("js", "https://example.com", deps, sink)
-    failed = [e for e in sink.events if e.type == "failed"]
-    assert not any("none of it is Python" in getattr(e, "error", "") for e in failed)
-    assert started
+    assert sink.events[-1].type == "done"
+    assert (
+        next(event.step.label for event in sink.events if event.type == "step_final") == Label.WORKS
+    )
+    sandbox.exec.assert_called_once_with("s0", "const x = 1;", lang="javascript")
 
 
 def test_paste_route_language_is_optional_and_limited() -> None:

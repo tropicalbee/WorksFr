@@ -9,8 +9,11 @@ from test_pipeline import ROOT, Cache, Proposer, Sink
 from app.config import ProviderConfig, Settings
 from app.labels import judge_patch, label_step
 from app.llm import LLMUnavailableError
-from app.models import Environment, ErrorInfo, ExecResult, Label, PatchVerdict
+from app.models import Environment, ErrorInfo, ExecResult, Label, PatchVerdict, StepKind
 from app.pipeline import PipelineDeps, run_check
+from app.repair.loop import RepairContext, RepairOutcome
+from app.session import CheckSession
+from app.step import Step
 
 
 def notebook_cells(codes: list[str]) -> bytes:
@@ -33,10 +36,10 @@ def test_guessed_import_origin_reaches_label_and_skips_repairs(
     from app.models import ProbeResult
 
     class ImportSandbox:
-        def start(self, packages: list[str]) -> Environment:
+        def start(self, packages: list[str], npm_packages: list[str] | None = None) -> Environment:
             return Environment(versions={package: "1" for package in packages})
 
-        def exec(self, step_id: str, code: str) -> ExecResult:
+        def exec(self, step_id: str, code: str, *, lang: str = "python") -> ExecResult:
             return ExecResult(
                 id=step_id,
                 status="error",
@@ -111,11 +114,11 @@ def test_cant_verify_dependency_is_not_sent_to_repair() -> None:
             '<pre class="language-shell">pip install pandas</pre>'
             '<pre class="language-java">int x = 1;</pre>'
             '<pre>{"x": 1}</pre>',
-            "This page has code, but none of it is Python that WorksFr can run.",
+            "This page has code, but none of it is code that WorksFr can run.",
         ),
     ],
 )
-def test_empty_and_non_python_pages(
+def test_empty_and_non_runnable_pages(
     body: str, message: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("app.extract.fetch.resolve_host", lambda _: ["93.184.216.34"])
@@ -205,10 +208,10 @@ def test_failed_install_reason_and_patch_verdict(module: str, package: str) -> N
 
 def test_failed_install_reason_reaches_final_report() -> None:
     class MissingPackageSandbox:
-        def start(self, packages: list[str]) -> Environment:
+        def start(self, packages: list[str], npm_packages: list[str] | None = None) -> Environment:
             return Environment(failed_packages=["pandas"])
 
-        def exec(self, step_id: str, code: str) -> ExecResult:
+        def exec(self, step_id: str, code: str, *, lang: str = "python") -> ExecResult:
             return ExecResult(
                 id=step_id,
                 status="error",
@@ -313,10 +316,10 @@ class FakeSandbox:
         self.clock, self.restart_error = clock, restart_error
         self.exec_count = 0
 
-    def start(self, packages: list[str]) -> Environment:
+    def start(self, packages: list[str], npm_packages: list[str] | None = None) -> Environment:
         return Environment(versions={})
 
-    def exec(self, step_id: str, code: str) -> ExecResult:
+    def exec(self, step_id: str, code: str, *, lang: str = "python") -> ExecResult:
         self.exec_count += 1
         if self.clock is not None and self.exec_count == 1:
             self.clock[0] += 850
@@ -331,12 +334,76 @@ class FakeSandbox:
 
         return ProbeResult(id=probe_id, status="ok", target_found=False)
 
-    def restart(self, replay: list[str]) -> None:
+    def restart(self, replay: list[tuple[StepKind, str]]) -> None:
         if self.restart_error is not None:
             raise self.restart_error
 
     def close(self) -> None:
         pass
+
+
+def test_pipeline_dispatches_languages_and_repairs_python_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class MixedSandbox(FakeSandbox):
+        languages: list[str] = []
+
+        def start(self, packages: list[str], npm_packages: list[str] | None = None) -> Environment:
+            assert packages == []
+            assert npm_packages == ["lodash"]
+            return Environment(npm_versions={"lodash": "4.17.21"})
+
+        def exec(self, step_id: str, code: str, *, lang: str = "python") -> ExecResult:
+            self.languages.append(lang)
+            return super().exec(step_id, code, lang=lang)
+
+    def repair(
+        _session: CheckSession,
+        step: Step,
+        context: RepairContext,
+        _proposer: object,
+        **_kwargs: object,
+    ) -> RepairOutcome:
+        assert step.block.kind == StepKind.PYTHON
+        if step.idx == 1:
+            return RepairOutcome(None)
+        assert step.idx == 2
+        assert context.earlier_code == "value = 42"
+        return RepairOutcome(None, llm_unavailable=True)
+
+    body = """<article>
+        <pre class="language-javascript">const _ = require('lodash');</pre>
+        <pre class="language-python">value = 42</pre>
+        <pre class="language-python">int('bad')</pre>
+        <pre class="language-typescript">throw new Error('bad');</pre>
+        <pre class="language-c">#include &lt;curl/curl.h&gt;</pre>
+        <pre class="language-cpp">int main() { return 0; }</pre>
+    </article>"""
+    monkeypatch.setattr("app.extract.fetch.resolve_host", lambda _: ["93.184.216.34"])
+    monkeypatch.setattr("app.pipeline.repair_step", repair)
+    settings = Settings(_env_file=None, providers=[])
+    sandbox, sink = MixedSandbox(), Sink()
+    with httpx.Client(
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, text=body))
+    ) as http:
+        deps = PipelineDeps(settings, lambda _: sandbox, Proposer(), http, Cache())
+        run_check("mixed", "https://example.com", deps, sink)
+    finals = [event.step for event in sink.events if event.type == "step_final"]
+    assert sandbox.languages == ["javascript", "python", "python", "typescript", "cpp"]
+    assert [step.label for step in finals] == [
+        Label.WORKS,
+        Label.WORKS,
+        Label.BROKEN,
+        Label.BROKEN,
+        Label.CANT_VERIFY,
+        Label.WORKS,
+    ]
+    assert finals[3].reason == "ValueError: bad value"
+    assert finals[3].error is not None
+    assert finals[3].repair_attempts == []
+    assert finals[4].reason == "needs the system library curl/curl.h"
+    assert finals[4].error is None
+    assert sink.events[-1].type == "done"
 
 
 def test_no_repair_when_little_time_is_left() -> None:

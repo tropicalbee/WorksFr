@@ -14,7 +14,7 @@ from typing import TypeVar
 from pydantic import ValidationError
 
 from app.config import Settings
-from app.models import Environment, ExecResult, ProbeResult
+from app.models import Environment, ExecResult, ProbeResult, StepKind
 from app.sandbox.interface import SandboxError, StepTimeoutError
 
 Result = TypeVar("Result", ExecResult, ProbeResult)
@@ -29,7 +29,9 @@ class LocalRunnerSandbox:
         self.requests: list[dict[str, str]] = []
         self._log = None
 
-    def start(self, packages: list[str]) -> Environment:
+    def start(self, packages: list[str], npm_packages: list[str] | None = None) -> Environment:
+        if npm_packages:
+            raise SandboxError("Local test sandbox only supports Python packages")
         self.packages = list(packages)
         directory = ROOT / ".scratch" / "local-runner" / uuid.uuid4().hex
         captures, work = directory / "captures", directory / "work"
@@ -98,19 +100,23 @@ class LocalRunnerSandbox:
             raise SandboxError("Local runner id mismatch")
         return result
 
-    def exec(self, step_id: str, code: str) -> ExecResult:
-        return self._request({"op": "exec", "id": step_id, "code": code}, ExecResult)
+    def exec(self, step_id: str, code: str, *, lang: str = "python") -> ExecResult:
+        if lang not in (StepKind.PYTHON, StepKind.REPL):
+            raise SandboxError("Local test sandbox only supports trusted Python fixtures")
+        return self._request(
+            {"op": "exec", "id": step_id, "code": code, "lang": StepKind.PYTHON.value}, ExecResult
+        )
 
     def probe(self, probe_id: str, target: str, name: str) -> ProbeResult:
         return self._request(
             {"op": "probe", "id": probe_id, "target": target, "name": name}, ProbeResult
         )
 
-    def restart(self, replay: list[str]) -> None:
+    def restart(self, replay: list[tuple[StepKind, str]]) -> None:
         self.close()
         self.start(self.packages)
-        for index, code in enumerate(replay):
-            self.exec(f"replay-{index}", code)
+        for index, (kind, code) in enumerate(replay):
+            self.exec(f"replay-{index}", code, lang=kind.value)
 
     def close(self) -> None:
         process, self.process = self.process, None

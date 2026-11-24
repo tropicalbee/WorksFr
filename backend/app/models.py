@@ -180,6 +180,8 @@ class Environment(BaseModel):
     versions: dict[str, str] = Field(default_factory=dict)
     failed_packages: list[str] = Field(default_factory=list)
     """Names pip could not install, for example an author's local module."""
+    npm_versions: dict[str, str] = Field(default_factory=dict)
+    failed_npm_packages: list[str] = Field(default_factory=list)
 
 
 # Labeling

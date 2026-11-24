@@ -31,6 +31,10 @@ class Step:
     def runnable(self) -> bool:
         return self.block.runnable_code is not None
 
+    @property
+    def is_python(self) -> bool:
+        return self.block.kind in (StepKind.PYTHON, StepKind.REPL)
+
     def record_run(self, result: ExecResult | None, decision: LabelDecision) -> None:
         self.result, self.decision = result, decision
 
@@ -62,6 +66,8 @@ class Step:
         return "\n".join([*magics, self.accepted.patched_code])
 
     def bound_names(self) -> set[str]:
+        if not self.is_python:
+            return set()
         try:
             tree = ast.parse(self.executed_code or "")
         except (SyntaxError, ValueError):

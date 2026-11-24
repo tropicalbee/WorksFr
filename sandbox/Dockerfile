@@ -1,3 +1,6 @@
+ARG NODE_MAJOR=26
+FROM node:${NODE_MAJOR}-bookworm-slim AS node
+
 FROM python:3.12-slim
 
 ENV PATH="/opt/venv/bin:$PATH" \
@@ -13,6 +16,16 @@ ENV PATH="/opt/venv/bin:$PATH" \
     COHERE_API_KEY=worksfr-fake-key \
     MISTRAL_API_KEY=worksfr-fake-key \
     HUGGINGFACEHUB_API_TOKEN=worksfr-fake-key
+
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc g++ libc6-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+    && npm install --global --no-audit --no-fund tsx@4.23.15
 
 RUN useradd --create-home --uid 1000 sandbox \
     && python -m venv /opt/venv \

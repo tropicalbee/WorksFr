@@ -21,6 +21,7 @@ from app.models import (
     PatchVerdict,
     ProbeResult,
     RepairAttempt,
+    StepKind,
 )
 from app.sandbox.interface import Sandbox, SandboxError, StepTimeoutError
 from app.step import Step
@@ -38,12 +39,14 @@ class CheckSession:
         *,
         clock: Callable[[], float] = time.monotonic,
         guessed_packages: Collection[str] = (),
+        c_system_headers: Collection[str] = (),
     ) -> None:
         self.sandbox, self.settings, self._clock = sandbox, settings, clock
         self._guessed_packages = tuple(guessed_packages)
+        self._c_system_headers = frozenset(c_system_headers)
         self._environment: Environment | None = None
         self._deadline: float | None = None
-        self._ledger: list[tuple[int, str]] = []
+        self._ledger: list[tuple[int, StepKind, str]] = []
         self._unbound: dict[str, int] = {}
         self._unverified_sources: set[int] = set()
         self._probe_id = 0
@@ -56,7 +59,7 @@ class CheckSession:
         return self._environment
 
     @property
-    def ledger(self) -> list[tuple[int, str]]:
+    def ledger(self) -> list[tuple[int, StepKind, str]]:
         return list(self._ledger)
 
     def _check_deadline(self) -> None:
@@ -69,16 +72,16 @@ class CheckSession:
             return None
         return self._deadline - self._clock()
 
-    def start(self, packages: list[str]) -> Environment:
+    def start(self, packages: list[str], npm_packages: list[str] | None = None) -> Environment:
         self._check_deadline()
         self._deadline = self._clock() + self.settings.check_timeout_seconds
-        self._environment = self.sandbox.start(packages)
+        self._environment = self.sandbox.start(packages, npm_packages=npm_packages)
         self._check_deadline()
         return self.environment
 
-    def _restart(self, ledger: list[tuple[int, str]]) -> None:
+    def _restart(self, ledger: list[tuple[int, StepKind, str]]) -> None:
         self._check_deadline()
-        self.sandbox.restart([code for _, code in ledger])
+        self.sandbox.restart([(kind, code) for _, kind, code in ledger])
         self._check_deadline()
 
     def _require_latest(self, step: Step) -> None:
@@ -93,7 +96,7 @@ class CheckSession:
             raise SandboxError("Runner protocol error")
 
     def _record_unbound(self, step: Step, decision: LabelDecision) -> None:
-        if decision.label not in (Label.BROKEN, Label.CANT_VERIFY):
+        if not step.is_python or decision.label not in (Label.BROKEN, Label.CANT_VERIFY):
             return
         for name in step.bound_names():
             self._unbound.setdefault(name, step.idx)
@@ -107,13 +110,15 @@ class CheckSession:
         code = step.executed_code
         if code is None:
             raise ValueError("Step has no runnable code")
-        decision = precheck(code)
+        kind = step.block.kind
+        decision = precheck(code, kind=kind, c_system_headers=self._c_system_headers)
         if decision is not None:
             step.record_run(None, decision)
             self._record_unbound(step, decision)
             return decision
         try:
-            result = self.sandbox.exec(f"s{step.idx}", code)
+            lang = StepKind.PYTHON.value if step.is_python else kind.value
+            result = self.sandbox.exec(f"s{step.idx}", code, lang=lang)
         except StepTimeoutError:
             self._restart(self._ledger)
             decision = label_step(None, timed_out=True)
@@ -122,7 +127,7 @@ class CheckSession:
             return decision
         self._check_deadline()
         self._check_protocol(result)
-        source = cascade_source(result.error, self._unbound)
+        source = cascade_source(result.error, self._unbound) if step.is_python else None
         decision = (
             cascade_decision(
                 source, Label.CANT_VERIFY if source in self._unverified_sources else Label.BROKEN
@@ -130,11 +135,15 @@ class CheckSession:
             if source is not None
             else label_step(
                 result,
+                kind=kind,
                 failed_packages=self.environment.failed_packages,
                 guessed_packages=self._guessed_packages,
+                failed_npm_packages=self.environment.failed_npm_packages,
             )
         )
-        self._ledger.append((step.idx, code))
+        # Python can leave bindings behind on error. The other runners keep successful code.
+        if step.is_python or result.status == "ok":
+            self._ledger.append((step.idx, kind, code))
         step.record_run(result, decision)
         self._record_unbound(step, decision)
         return decision
@@ -147,7 +156,7 @@ class CheckSession:
         baseline = self._ledger[:-1]
         self._restart(baseline)
         try:
-            result = self.sandbox.exec(f"s{step.idx}-a{attempt}", code)
+            result = self.sandbox.exec(f"s{step.idx}-a{attempt}", code, lang=StepKind.PYTHON.value)
         except StepTimeoutError:
             self._restart(baseline)
             decision, verdict = judge_patch(None, timed_out=True)
@@ -166,7 +175,7 @@ class CheckSession:
         self._require_latest(step)
         names = step.bound_names()
         step.accept(attempt)
-        self._ledger[-1] = (step.idx, attempt.patched_code)
+        self._ledger[-1] = (step.idx, step.block.kind, attempt.patched_code)
         for name in names:
             if self._unbound.get(name) == step.idx:
                 self._unbound.pop(name)

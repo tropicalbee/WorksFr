@@ -12,17 +12,39 @@ from typing import BinaryIO, Protocol, Self, TypeVar
 from pydantic import ValidationError
 
 from app.config import Settings
-from app.models import Environment, ExecResult, ProbeResult
+from app.models import Environment, ExecResult, ProbeResult, StepKind
 from app.packages import normalize
 from app.sandbox.interface import SandboxError, SandboxTimeLimit, StepTimeoutError
 
 MAX_REPLY_BYTES = 1024 * 1024
 PACKAGE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*", re.ASCII)
+NPM_NAME_PART = r"[A-Za-z0-9][A-Za-z0-9._~-]*"
+NPM_PACKAGE_NAME = re.compile(rf"(?:@{NPM_NAME_PART}/)?{NPM_NAME_PART}", re.ASCII)
+NPM_VERSION = re.compile(
+    r"(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){2}"
+    r"(?:-[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*)?"
+    r"(?:\+[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*)?",
+    re.ASCII,
+)
+WORK_DIR = "/home/sandbox/work"
 VERSION_CODE = (
     "import importlib.metadata as m, json; "
     "print(json.dumps({d.metadata['Name']: d.version for d in m.distributions() "
     "if d.metadata['Name']}))"
 )
+NPM_VERSION_CODE = """
+const fs = require('node:fs');
+const versions = [];
+for (const name of process.argv.slice(1)) {
+    try {
+        const metadata = JSON.parse(fs.readFileSync(`node_modules/${name}/package.json`, 'utf8'));
+        versions.push([name, metadata.version]);
+    } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+    }
+}
+console.log(JSON.stringify(Object.fromEntries(versions)));
+"""
 Result = TypeVar("Result", ExecResult, ProbeResult)
 
 
@@ -71,6 +93,7 @@ class DockerSandbox:
         self._container: str | None = None
         self._process: RunnerProcess | None = None
         self._packages: list[str] = []
+        self._npm_packages: list[str] = []
         self._deadline: float | None = None
         self._usable = False
         self._initial_environment: Environment | None = None
@@ -99,30 +122,58 @@ class DockerSandbox:
         if result.returncode:
             raise SandboxError(f"{action} failed (exit {result.returncode})")
 
-    def _install(self, name: str, packages: list[str], *, pinned: bool = False) -> bool:
+    def _install(self, args: list[str]) -> bool:
         try:
-            result = self._commands.run(
-                [
-                    "docker",
-                    "exec",
-                    name,
-                    "pip",
-                    "install",
-                    *([] if pinned else ["--upgrade"]),
-                    *packages,
-                ],
-                timeout=self._time_left(300),
-            )
+            result = self._commands.run(args, timeout=self._time_left(300))
         except subprocess.TimeoutExpired:
             if self._deadline_passed():
                 raise SandboxTimeLimit("Whole-check timeout exceeded") from None
             return False
         return result.returncode == 0
 
-    def start(self, packages: list[str]) -> Environment:
+    def _failed_installs(self, command: list[str], packages: list[str]) -> list[str]:
+        if not packages or self._install([*command, *packages]):
+            return []
+        return [package for package in packages if not self._install([*command, package])]
+
+    def _prepare_npm(
+        self, name: str, packages: list[str], baseline: Environment | None
+    ) -> tuple[dict[str, str], list[str]]:
+        command = ["docker", "exec", "-w", WORK_DIR, name]
+        install = [*command, "npm", "install", "--no-audit", "--no-fund"]
+        if baseline is None:
+            valid, failed = [], []
+            for package in dict.fromkeys(packages):
+                (valid if NPM_PACKAGE_NAME.fullmatch(package) else failed).append(package)
+            failed.extend(self._failed_installs(install, valid))
+            requested = [package for package in valid if package not in failed]
+        else:
+            requested = list(baseline.npm_versions)
+            failed = list(baseline.failed_npm_packages)
+            pins = [f"{package}@{baseline.npm_versions[package]}" for package in requested]
+            if pins and not self._install([*install, *pins]):
+                raise SandboxError("environment could not be reproduced: pinned npm install failed")
+
+        if not requested:
+            return {}, failed
+        metadata = self._run([*command, "node", "-e", NPM_VERSION_CODE, "--", *requested])
+        self._require_success(metadata, "npm version inspection")
+        versions = json.loads(metadata.stdout)
+        if not isinstance(versions, dict) or not all(
+            package in requested and isinstance(version, str) and NPM_VERSION.fullmatch(version)
+            for package, version in versions.items()
+        ):
+            raise SandboxError("Invalid npm version metadata")
+        if baseline is not None and versions != baseline.npm_versions:
+            raise SandboxError("environment could not be reproduced: installed npm versions differ")
+        failed.extend(package for package in requested if package not in versions)
+        return versions, failed
+
+    def start(self, packages: list[str], npm_packages: list[str] | None = None) -> Environment:
         if self._container is not None:
             raise SandboxError("Sandbox already started")
         self._packages = list(packages)
+        self._npm_packages = list(npm_packages or ())
         if self._deadline is None:
             self._deadline = time.monotonic() + self.settings.check_timeout_seconds
         valid, failed = [], []
@@ -164,20 +215,18 @@ class DockerSandbox:
                 "Container startup",
             )
             baseline = self._initial_environment if self._pinned_restart else None
+            pip = ["docker", "exec", name, "pip", "install"]
             if baseline is not None:
                 pins = [
                     f"{package}=={version}"
                     for package, version in baseline.versions.items()
                     if package not in baseline.failed_packages
                 ]
-                if pins and not self._install(name, pins, pinned=True):
+                if pins and not self._install([*pip, *pins]):
                     raise SandboxError("environment could not be reproduced: pinned install failed")
                 failed = list(baseline.failed_packages)
-            elif valid:
-                if not self._install(name, valid):
-                    for package in valid:
-                        if not self._install(name, [package]):
-                            failed.append(package)
+            else:
+                failed.extend(self._failed_installs([*pip, "--upgrade"], valid))
             versions = self._run(["docker", "exec", name, "python", "-c", VERSION_CODE])
             self._require_success(versions, "Version inspection")
             installed = json.loads(versions.stdout)
@@ -185,6 +234,7 @@ class DockerSandbox:
                 isinstance(key, str) and isinstance(value, str) for key, value in installed.items()
             ):
                 raise SandboxError("Invalid installed-version metadata")
+            npm_versions, failed_npm = self._prepare_npm(name, self._npm_packages, baseline)
             disconnected = self._run(["docker", "network", "disconnect", "bridge", name])
             self._require_success(disconnected, "Network disconnect")
             self._process = self._commands.popen(
@@ -222,7 +272,12 @@ class DockerSandbox:
                         "environment could not be reproduced: installed versions differ"
                     )
                 return baseline.model_copy(deep=True)
-            environment = Environment(versions=requested_versions, failed_packages=failed)
+            environment = Environment(
+                versions=requested_versions,
+                failed_packages=failed,
+                npm_versions=npm_versions,
+                failed_npm_packages=failed_npm,
+            )
             if self._initial_environment is None:
                 self._initial_environment = environment.model_copy(deep=True)
             return environment
@@ -280,8 +335,10 @@ class DockerSandbox:
             self._kill_container()
             raise
 
-    def exec(self, step_id: str, code: str) -> ExecResult:
-        return self._request({"op": "exec", "id": step_id, "code": code}, ExecResult)
+    def exec(self, step_id: str, code: str, *, lang: str = "python") -> ExecResult:
+        if lang == StepKind.REPL:
+            lang = StepKind.PYTHON
+        return self._request({"op": "exec", "id": step_id, "code": code, "lang": lang}, ExecResult)
 
     def probe(self, probe_id: str, target: str, name: str) -> ProbeResult:
         return self._request(
@@ -289,16 +346,17 @@ class DockerSandbox:
             ProbeResult,
         )
 
-    def restart(self, replay: list[str]) -> None:
+    def restart(self, replay: list[tuple[StepKind, str]]) -> None:
         packages = list(self._packages)
+        npm_packages = list(self._npm_packages)
         self.close()
         self._pinned_restart = True
         try:
-            self.start(packages)
+            self.start(packages, npm_packages)
         finally:
             self._pinned_restart = False
-        for index, code in enumerate(replay):
-            self.exec(f"replay-{index}", code)
+        for index, (kind, code) in enumerate(replay):
+            self.exec(f"replay-{index}", code, lang=kind)
 
     def _kill_container(self) -> None:
         self._usable = False

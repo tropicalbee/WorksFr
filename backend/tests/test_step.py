@@ -82,3 +82,10 @@ def test_bound_names_only_module_scope() -> None:
     }
     step.block.runnable_code = "invalid("
     assert step.bound_names() == set()
+
+
+def test_bound_names_ignore_other_languages() -> None:
+    for kind in (StepKind.JAVASCRIPT, StepKind.TYPESCRIPT, StepKind.C, StepKind.CPP):
+        code = "value = 1"
+        step = Step(Block(idx=0, kind=kind, code=code, runnable_code=code))
+        assert step.bound_names() == set()

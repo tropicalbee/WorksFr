@@ -6,7 +6,7 @@ labeling and repair use a fake that implements the same methods.
 
 from typing import Protocol
 
-from app.models import Environment, ExecResult, ProbeResult
+from app.models import Environment, ExecResult, ProbeResult, StepKind
 
 
 class StepTimeoutError(Exception):
@@ -22,22 +22,22 @@ class SandboxTimeLimit(SandboxError):
 
 
 class Sandbox(Protocol):
-    def start(self, packages: list[str]) -> Environment:
-        """Start the container, install `packages`, cut the network, start the runner.
+    def start(self, packages: list[str], npm_packages: list[str] | None = None) -> Environment:
+        """Install pip and npm packages, cut the network, and start the runner.
 
-        A package pip can't install goes in `failed_packages`; the check carries on
-        without it. Raises SandboxError when the container itself can't be prepared.
+        Record install failures in the environment and carry on without those packages.
+        Raises SandboxError when the container itself can't be prepared.
         """
         ...
 
-    def exec(self, step_id: str, code: str) -> ExecResult:
+    def exec(self, step_id: str, code: str, *, lang: str = "python") -> ExecResult:
         """Run one step in the session namespace. Raises StepTimeoutError."""
         ...
 
     def probe(self, probe_id: str, target: str, name: str) -> ProbeResult: ...
 
-    def restart(self, replay: list[str]) -> None:
-        """Start a fresh container and rerun `replay` (earlier steps' final code) in order."""
+    def restart(self, replay: list[tuple[StepKind, str]]) -> None:
+        """Start a fresh container and rerun earlier steps by kind, in order."""
         ...
 
     def close(self) -> None:

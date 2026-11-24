@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 
 from app.config import Settings
-from app.models import ExecResult
+from app.models import ExecResult, StepKind
 from app.sandbox.docker_sandbox import MAX_REPLY_BYTES, DockerSandbox
 from app.sandbox.interface import SandboxError, StepTimeoutError
 
@@ -71,6 +71,8 @@ class Commands:
         self.processes: list[Process] = []
         self.disconnect_fails = False
         self.install_failures: set[tuple[str, ...]] = set()
+        self.npm_install_failures: set[tuple[str, ...]] = set()
+        self.npm_versions: dict[str, str] = {}
 
     def run(self, args: list[str], timeout: float) -> subprocess.CompletedProcess[str]:
         self.calls.append(args)
@@ -84,6 +86,13 @@ class Commands:
             status = int(packages in self.install_failures)
         if "-c" in args:
             output = '{"pandas":"2.2.3"}'
+        if args[5:7] == ["npm", "install"]:
+            packages = tuple(args[9:])
+            status = int(packages in self.npm_install_failures)
+        if args[5:7] == ["node", "-e"]:
+            output = json.dumps(
+                {name: self.npm_versions[name] for name in args[9:] if name in self.npm_versions}
+            )
         return subprocess.CompletedProcess(args, status, output, "")
 
     def popen(self, args: list[str]) -> Process:
@@ -147,13 +156,78 @@ def test_invalid_packages_and_install_fallback(sandbox: DockerSandbox, commands:
     sandbox.close()
 
 
+def test_npm_install_and_version_inspection_precede_disconnect(
+    sandbox: DockerSandbox, commands: Commands
+) -> None:
+    commands.npm_versions = {"lodash": "4.17.21", "@scope/name": "1.0.0-rc.1", "other": "1.0.0"}
+    env = sandbox.start(["pandas"], npm_packages=["lodash", "@scope/name"])
+    assert env.versions == {"pandas": "2.2.3"}
+    assert env.npm_versions == {"lodash": "4.17.21", "@scope/name": "1.0.0-rc.1"}
+    assert env.failed_npm_packages == []
+    install = next(i for i, args in enumerate(commands.calls) if args[5:7] == ["npm", "install"])
+    inspect = next(i for i, args in enumerate(commands.calls) if args[5:7] == ["node", "-e"])
+    disconnect = next(i for i, args in enumerate(commands.calls) if "disconnect" in args)
+    assert install < inspect < disconnect < len(commands.calls) - 1
+    assert commands.calls[install][1:] == [
+        "exec",
+        "-w",
+        "/home/sandbox/work",
+        "worksfr-check123-1",
+        "npm",
+        "install",
+        "--no-audit",
+        "--no-fund",
+        "lodash",
+        "@scope/name",
+    ]
+    sandbox.close()
+
+
+def test_invalid_npm_names_and_install_fallback(sandbox: DockerSandbox, commands: Commands) -> None:
+    invalid = [
+        "--global",
+        "./local",
+        "../relative",
+        "/absolute/path",
+        "git+https://a/b",
+        "file:./local",
+        "name@1.0.0",
+        "@scope/..",
+        "@../name",
+        "@scope/a/b",
+        "name\n",
+        "owner/repo",
+        "x y",
+        "x;y",
+        r"some\path",
+        "",
+    ]
+    commands.npm_install_failures = {("lodash", "missing"), ("missing",)}
+    commands.npm_versions = {"lodash": "4.17.21"}
+    env = sandbox.start([], npm_packages=["lodash", "missing", *invalid, "lodash"])
+    assert env.npm_versions == {"lodash": "4.17.21"}
+    assert env.failed_npm_packages == [*invalid, "missing"]
+    installs = [args[9:] for args in commands.calls if args[5:7] == ["npm", "install"]]
+    assert installs == [["lodash", "missing"], ["lodash"], ["missing"]]
+    assert all(value not in args for args in commands.calls for value in invalid)
+    sandbox.close()
+
+
 def test_exec_and_probe_round_trip(sandbox: DockerSandbox, commands: Commands) -> None:
-    sandbox.start([])
+    env = sandbox.start([])
+    assert env.npm_versions == {}
+    assert env.failed_npm_packages == []
+    assert not any(args[5:7] in (["npm", "install"], ["node", "-e"]) for args in commands.calls)
     result = sandbox.exec("s1", "print('hello')")
     assert isinstance(result, ExecResult)
     assert result.stdout == "hello"
     assert sandbox.probe("p1", "json", "dump").target_found
-    assert commands.processes[0].requests[0] == {"op": "exec", "id": "s1", "code": "print('hello')"}
+    assert commands.processes[0].requests[0] == {
+        "op": "exec",
+        "id": "s1",
+        "code": "print('hello')",
+        "lang": "python",
+    }
     sandbox.close()
 
 
@@ -189,9 +263,13 @@ def test_restart_replays_and_close_is_idempotent(
     sandbox: DockerSandbox, commands: Commands
 ) -> None:
     sandbox.start(["pandas"])
-    sandbox.restart(["x = 1", "x + 1"])
+    sandbox.restart([(StepKind.REPL, "x = 1"), (StepKind.JAVASCRIPT, "let x = 2;")])
     assert commands.processes[0].killed
-    assert [request["code"] for request in commands.processes[1].requests] == ["x = 1", "x + 1"]
+    requests = commands.processes[1].requests
+    assert [(request["lang"], request["code"]) for request in requests] == [
+        ("python", "x = 1"),
+        ("javascript", "let x = 2;"),
+    ]
     names = [args[args.index("--name") + 1] for args in commands.calls if "--name" in args]
     assert len(set(names)) == 2
     sandbox.close()
@@ -225,6 +303,42 @@ def test_failed_pin_cleans_up(sandbox: DockerSandbox, commands: Commands) -> Non
     commands.install_failures.add(("pandas==2.2.3",))
     with pytest.raises(SandboxError, match="environment could not be reproduced"):
         sandbox.restart([])
+    assert commands.calls[-1][1:3] == ["rm", "-f"]
+
+
+def test_restart_installs_npm_pins_and_skips_failed(
+    sandbox: DockerSandbox, commands: Commands
+) -> None:
+    commands.npm_install_failures = {("@scope/name", "missing"), ("missing",)}
+    commands.npm_versions = {"@scope/name": "1.0.0-rc.1+build.2"}
+    first = sandbox.start([], npm_packages=["@scope/name", "missing"])
+    commands.calls.clear()
+    sandbox.restart([])
+    installs = [args[9:] for args in commands.calls if args[5:7] == ["npm", "install"]]
+    assert installs == [["@scope/name@1.0.0-rc.1+build.2"]]
+    assert not any("missing" in args for args in commands.calls)
+    assert first.failed_npm_packages == ["missing"]
+    sandbox.close()
+
+
+@pytest.mark.parametrize("installed", [{}, {"lodash": "4.17.20"}])
+def test_restart_checks_npm_versions(
+    sandbox: DockerSandbox, commands: Commands, installed: dict[str, str]
+) -> None:
+    commands.npm_versions = {"lodash": "4.17.21"}
+    sandbox.start([], npm_packages=["lodash"])
+    commands.npm_versions = installed
+    with pytest.raises(SandboxError, match="environment could not be reproduced"):
+        sandbox.restart([])
+    assert commands.calls[-1][1:3] == ["rm", "-f"]
+
+
+def test_invalid_npm_version_cannot_form_install_spec(
+    sandbox: DockerSandbox, commands: Commands
+) -> None:
+    commands.npm_versions = {"lodash": "file:../other"}
+    with pytest.raises(SandboxError, match="Invalid npm version metadata"):
+        sandbox.start([], npm_packages=["lodash"])
     assert commands.calls[-1][1:3] == ["rm", "-f"]
 
 

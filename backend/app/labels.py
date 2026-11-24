@@ -9,7 +9,8 @@ import ast
 import re
 from collections.abc import Collection, Mapping
 
-from app.models import ErrorInfo, ExecResult, Label, LabelDecision, PatchVerdict
+from app.extract.libs import npm_package_name
+from app.models import ErrorInfo, ExecResult, Label, LabelDecision, PatchVerdict, StepKind
 from app.packages import dist_for_import, normalize
 
 REASON_TIMEOUT = "too slow: the step timed out"
@@ -19,6 +20,7 @@ REASON_NETWORK = "needs network access"
 REASON_GPU = "needs a GPU"
 REASON_DATA_FILE = "needs a data file that is not on the page"
 REASON_LOCAL_MODULE = "imports a local file from the author's machine"
+REASON_BROWSER = "runs in a web browser"
 CASCADE_PREFIX = "depends on step "
 
 DEPRECATION_CATEGORIES: tuple[str, ...] = (
@@ -75,6 +77,26 @@ GPU_MESSAGE_PATTERNS: tuple[str, ...] = (
 _QUOTED_PATH = re.compile(r": '(.*)'\s*$", re.DOTALL)
 _MODULE_NAME = re.compile(r"No module named ['\"]([^'\"]+)['\"]")
 _IMPORT_FROM = re.compile(r"cannot import name ['\"][^'\"]+['\"] from ['\"]([^'\"]+)['\"]")
+_NODE_MISSING_MODULE = re.compile(r"Cannot find (?:module|package) ['\"]([^'\"]+)['\"]")
+_BROWSER_REFERENCE = re.compile(r"(?:document|window|navigator|localStorage|alert) is not defined")
+_NODE_NETWORK_CODE = r"(?:ENOTFOUND|ECONNREFUSED|EAI_AGAIN)"
+_NODE_NETWORK = re.compile(rf"\b(?:{_NODE_NETWORK_CODE}|fetch failed)\b", re.IGNORECASE)
+_NODE_NETWORK_CAUSE = re.compile(rf"^\s+code: ['\"]{_NODE_NETWORK_CODE}['\"]", re.M)
+
+_COMMENTS_AND_STRINGS = re.compile(
+    r"//[^\n]*|/\*[\s\S]*?\*/"
+    r"""|"(?:\\[\s\S]|[^"\\\n])*"|'(?:\\[\s\S]|[^'\\\n])*'|`(?:\\[\s\S]|[^`\\])*`"""
+)
+_SYSTEM_INCLUDE = re.compile(r"^[ \t]*#[ \t]*include[ \t]*<([^>\n]+)>", re.M)
+_C_KEYBOARD = re.compile(
+    r"\b(?:(?:scanf|getchar|gets)\s*\(|cin\s*>>"
+    r"|fgets\s*\((?:[^();]|\([^()]*\))*?,\s*stdin\s*\))"
+)
+_READLINE_SPECIFIER = r"""(['"])(?:node:)?readline(?:/promises)?\1"""
+_JS_KEYBOARD = re.compile(
+    r"(?<![\w$])(?:process\s*\.\s*stdin(?![\w$])|readline\s*[.(]|prompt\s*\()"
+    r"|(?<![\w$])(?:require\s*\(\s*|import\s*\(?\s*|from\s+)" + _READLINE_SPECIFIER
+)
 
 
 def _matches(message: str, patterns: tuple[str, ...]) -> bool:
@@ -98,12 +120,33 @@ def _missing_module_is_failed(message: str, failed_packages: Collection[str]) ->
     return top_level in {normalize(p) for p in failed_packages}
 
 
+def _failed_install_decision(package: str) -> LabelDecision:
+    return LabelDecision(
+        label=Label.CANT_VERIFY,
+        reason=f"{package} didn't install in the sandbox, so this step couldn't run.",
+    )
+
+
+def _label_node_error(error: ErrorInfo, failed_packages: Collection[str]) -> LabelDecision | None:
+    if error.type == "ReferenceError" and _BROWSER_REFERENCE.fullmatch(error.message):
+        return LabelDecision(label=Label.CANT_VERIFY, reason=REASON_BROWSER)
+    if _NODE_NETWORK.search(error.message) or _NODE_NETWORK_CAUSE.search(error.traceback):
+        return LabelDecision(label=Label.CANT_VERIFY, reason=REASON_NETWORK)
+    if missing := _NODE_MISSING_MODULE.match(error.message):
+        package = npm_package_name(missing.group(1))
+        if package is not None and package in failed_packages:
+            return _failed_install_decision(package)
+    return None
+
+
 def label_step(
     result: ExecResult | None,
     *,
+    kind: StepKind = StepKind.PYTHON,
     timed_out: bool = False,
     failed_packages: Collection[str] = (),
     guessed_packages: Collection[str] = (),
+    failed_npm_packages: Collection[str] = (),
 ) -> LabelDecision:
     """Label one step from its sandbox result. Rules apply in the ARCHITECTURE order."""
     if timed_out or result is None:
@@ -121,6 +164,11 @@ def label_step(
 
     etype = result.error.type if result.error else ""
     message = result.error.message if result.error else ""
+    broken = LabelDecision(label=Label.BROKEN, reason=f"{etype}: {message}".strip(": "))
+    if kind in (StepKind.JAVASCRIPT, StepKind.TYPESCRIPT) and result.error:
+        return _label_node_error(result.error, failed_npm_packages) or broken
+    if kind not in (StepKind.PYTHON, StepKind.REPL):
+        return broken
 
     if etype in STDIN_ERROR_TYPES:
         return LabelDecision(label=Label.CANT_VERIFY, reason=REASON_KEYBOARD)
@@ -135,14 +183,11 @@ def label_step(
     if etype == "ModuleNotFoundError" and _missing_module_is_failed(message, failed_packages):
         found = _MODULE_NAME.search(message)
         package = dist_for_import(found.group(1).split(".")[0]) if found else "The package"
-        return LabelDecision(
-            label=Label.CANT_VERIFY,
-            reason=f"{package} didn't install in the sandbox, so this step couldn't run.",
-        )
+        return _failed_install_decision(package)
     if etype == "ImportError" and (match := _IMPORT_FROM.search(message)):
         if dist_for_import(match.group(1)) in {normalize(name) for name in guessed_packages}:
             return LabelDecision(label=Label.CANT_VERIFY, reason=REASON_LOCAL_MODULE)
-    return LabelDecision(label=Label.BROKEN, reason=f"{etype}: {message}".strip(": "))
+    return broken
 
 
 def _is_cuda_str(node: ast.expr) -> bool:
@@ -185,8 +230,39 @@ def _precheck_call(node: ast.Call) -> LabelDecision | None:
     return None
 
 
-def precheck(code: str) -> LabelDecision | None:
-    """Decide Can't verify before running, or None. Unparseable code returns None."""
+def _input_scan_code(code: str, *, keep_readline: bool = False) -> str:
+    def mask(match: re.Match[str]) -> str:
+        token = match.group()
+        if keep_readline and re.fullmatch(_READLINE_SPECIFIER, token):
+            return token
+        # Keep line boundaries and leave a placeholder where a string was an argument.
+        replacement = " " if token.startswith("/") else "_"
+        return replacement + "\n" * token.count("\n")
+
+    return _COMMENTS_AND_STRINGS.sub(mask, code)
+
+
+def precheck(
+    code: str, *, kind: StepKind = StepKind.PYTHON, c_system_headers: Collection[str] = ()
+) -> LabelDecision | None:
+    """Decide Can't verify before running, or leave the decision to the sandbox."""
+    if kind in (StepKind.C, StepKind.CPP):
+        source = _input_scan_code(code)
+        for match in _SYSTEM_INCLUDE.finditer(source):
+            header = match.group(1).strip()
+            if header in c_system_headers:
+                return LabelDecision(
+                    label=Label.CANT_VERIFY, reason=f"needs the system library {header}"
+                )
+        if _C_KEYBOARD.search(source):
+            return LabelDecision(label=Label.CANT_VERIFY, reason=REASON_KEYBOARD)
+        return None
+    if kind in (StepKind.JAVASCRIPT, StepKind.TYPESCRIPT):
+        if _JS_KEYBOARD.search(_input_scan_code(code, keep_readline=True)):
+            return LabelDecision(label=Label.CANT_VERIFY, reason=REASON_KEYBOARD)
+        return None
+    if kind not in (StepKind.PYTHON, StepKind.REPL):
+        return None
     try:
         tree = ast.parse(code)
     except (SyntaxError, ValueError):
