@@ -2,7 +2,7 @@ import type { CheckReport, ErrorInfo, RepairAttempt, StepReport } from '@/api/ty
 import type { ReportLiveState } from '@/components/report/ReportView'
 
 function step(idx: number, original_code: string, label: StepReport['label'], extra: Partial<StepReport> = {}): StepReport {
-  return { idx, kind: 'python', original_code, final_code: original_code, label, reason: '', explanation: '', output: '', ...extra }
+  return { idx, kind: 'python', original_code, final_code: original_code, label, reason: '', explanation: '', output: '', low_confidence: false, ...extra }
 }
 
 function attempt(number: number, provider: string, patched_code: string, explanation: string, apis_changed: string[], error?: Pick<ErrorInfo, 'type' | 'message'>): RepairAttempt {
@@ -26,7 +26,7 @@ const meanPatch = 'df.groupby("city").mean(numeric_only=True)'
 
 export const sampleReport: CheckReport = {
   id: 'sample', source_kind: 'url', source: 'https://example.com/pandas-tutorial',
-  title: 'Pandas basics: building and reshaping a DataFrame', published: '2019-03-14', date_source: 'page', status: 'done',
+  title: 'Pandas basics: building and reshaping a DataFrame', published: '2019-03-14', date_source: 'page', status: 'done', created_at: '2026-11-24T09:00:00+00:00',
   versions: { pandas: '2.2.3', numpy: '2.1.3', matplotlib: '3.9.2' }, failed_packages: [],
   score: { works: 3, deprecated: 1, broken: 2, cant_verify: 1, fixed: 2, fixed_unverified: 0, still_run: 4, checked: 6, ratio: 4 / 6 },
   steps: [
@@ -60,7 +60,7 @@ export function previewState(state: string | null): { report: CheckReport; liveS
   if (state === 'failed') return { report: { ...sampleReport, status: 'failed', steps: [], score: null, versions: {}, error: "The sandbox couldn't install pandas==2.2.3: pip ran out of time after 300 seconds." } }
   if (state === 'running') return {
     report: { ...sampleReport, status: 'running', steps: sampleReport.steps?.slice(0, 4), score: null },
-    liveState: { runningStepIndex: 4, pendingBlocks: (sampleReport.steps ?? []).slice(4).map(s => ({ idx: s.idx, kind: s.kind, code: s.original_code })) },
+    liveState: { runningStepIndex: 4, pendingBlocks: (sampleReport.steps ?? []).slice(4).map(s => ({ idx: s.idx, kind: s.kind, code: s.original_code, video_timestamp: null, low_confidence: false })) },
   }
   return { report: sampleReport }
 }

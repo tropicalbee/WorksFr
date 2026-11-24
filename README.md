@@ -75,6 +75,34 @@ npm install
 npm run dev
 ```
 
+### Use WorksFr from an agent (MCP)
+
+WorksFr ships an MCP server, so Claude Code, Claude Desktop, Cursor or any other MCP client can check a tutorial and read back the verified fixes. The server only talks to the backend's HTTP API. The sandbox stays in the backend, and the MCP process never runs tutorial code. Start the backend first (`uvicorn app.main:app`). If it isn't on `http://127.0.0.1:8000`, set `WORKSFR_API_URL`.
+
+Add it to Claude Code. Run this from the project root, and use your own path:
+
+```powershell
+claude mcp add worksfr -- C:\path\to\WorksFr\backend\.venv\Scripts\python.exe -m app.mcp_server
+```
+
+The server has to start with `backend/` as its working directory so that `app` imports. If your client doesn't let you set one, use `claude mcp add worksfr --env PYTHONPATH=C:\path\to\WorksFr\backend -- ...` or the `cwd` field below.
+
+For Claude Desktop and Cursor, add this to the client's MCP config:
+
+```json
+{
+  "mcpServers": {
+    "worksfr": {
+      "command": "C:\\path\\to\\WorksFr\\backend\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "app.mcp_server"],
+      "cwd": "C:\\path\\to\\WorksFr\\backend"
+    }
+  }
+}
+```
+
+Tools: `check_tutorial`, `check_code`, `get_report` and `recent_checks`. Try asking: "Check whether https://www.geeksforgeeks.org/python-pandas-dataframe-append/ still works." A check takes minutes.
+
 ## Project layout
 
 ```

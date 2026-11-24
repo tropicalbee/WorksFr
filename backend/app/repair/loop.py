@@ -33,11 +33,14 @@ class Proposer(Protocol):
 
 
 class LLMProposer:
-    def __init__(self, client: LLMClient) -> None:
+    def __init__(
+        self, client: LLMClient, *, on_wait: Callable[[str, float], None] | None = None
+    ) -> None:
         self.client = client
+        self.on_wait = on_wait
 
     def propose(self, messages: list[dict[str, str]]) -> tuple[RepairProposal, str]:
-        result = self.client.complete_json(messages, RepairProposal)
+        result = self.client.complete_json(messages, RepairProposal, on_wait=self.on_wait)
         return result.value, result.provider
 
 
@@ -56,7 +59,10 @@ class RepairContext:
 class RepairOutcome:
     verdict: PatchVerdict | None
     llm_unavailable: bool = False
+    out_of_time: bool = False
 
+
+REPAIR_MIN_SECONDS_LEFT = 90
 
 SYSTEM_PROMPT = (
     "Repair only this Python tutorial step, keeping its intent. "
@@ -178,6 +184,11 @@ def _messages(step: Step, context: RepairContext, evidence: Evidence) -> list[di
     ]
 
 
+def _too_late(session: CheckSession) -> bool:
+    left = session.seconds_left()
+    return left is not None and left < REPAIR_MIN_SECONDS_LEFT
+
+
 def repair_step(
     session: CheckSession,
     step: Step,
@@ -193,6 +204,8 @@ def repair_step(
         return RepairOutcome(None)
     if max_attempts < 1:
         raise ValueError("max_attempts must be positive")
+    if _too_late(session):
+        return RepairOutcome(None, out_of_time=True)
     # Restarts reinstall the container, so reset only if a patch actually ran.
     patch_ran = False
     evidence = gather(
@@ -211,6 +224,10 @@ def repair_step(
     previous_result: ExecResult = step.result
     previous_code = step.block.runnable_code or ""
     for number in range(1, max_attempts + 1):
+        if number >= 2 and _too_late(session):
+            if patch_ran:
+                session.reset()
+            return RepairOutcome(PatchVerdict.FAILED, out_of_time=True)
         if number >= 2:
             more = gather(
                 previous_code,

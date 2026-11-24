@@ -18,3 +18,17 @@ def test_broker_thread_publication_and_terminal() -> None:
         assert await anext(late) == event
 
     asyncio.run(run())
+
+
+def test_rate_limit_wait_event_round_trip() -> None:
+    stored = StoredEvent.model_validate(
+        {
+            "seq": 2,
+            "check_id": "c1",
+            "event": {"type": "rate_limit_wait", "provider": "test", "seconds": 3.0},
+        }
+    )
+    assert stored.event.type == "rate_limit_wait"
+    assert stored.event.provider == "test"
+    assert stored.event.seconds == 3.0
+    assert StoredEvent.model_validate_json(stored.model_dump_json()) == stored

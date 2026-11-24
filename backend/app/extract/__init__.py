@@ -3,8 +3,11 @@
 Tutorial content is untrusted data: it is parsed here, never executed or imported.
 """
 
+from urllib.parse import urlsplit
+
 import httpx
 
+from app.config import Settings
 from app.extract.blocks import build_blocks
 from app.extract.errors import ExtractionError
 from app.extract.fetch import check_url, fetch_url
@@ -12,6 +15,8 @@ from app.extract.html_page import page_metadata, parse_html_blocks
 from app.extract.libs import IMPORT_TO_PYPI, detect_packages
 from app.extract.markdown_doc import parse_markdown
 from app.extract.notebook import parse_notebook
+from app.extract.paste import PastedCode, extract_paste
+from app.extract.reader import read_page
 from app.extract.routing import Route, route_url
 from app.extract.stackexchange import extract_stackoverflow
 from app.models import DateSource, Extraction, SourceFormat, SourceKind
@@ -19,9 +24,11 @@ from app.models import DateSource, Extraction, SourceFormat, SourceKind
 __all__ = [
     "IMPORT_TO_PYPI",
     "ExtractionError",
+    "PastedCode",
     "Route",
     "detect_packages",
     "extract_notebook",
+    "extract_paste",
     "extract_url",
     "route_url",
     "check_url",
@@ -38,6 +45,11 @@ def _fetch(client: httpx.Client, urls: tuple[str, ...]) -> tuple[str, bytes]:
         if status == 404 and len(urls) > 1:
             last_error = f"{url} not found"
             continue
+        if status in (401, 403, 429):
+            raise ExtractionError(
+                f"{urlsplit(url).hostname} blocks automated reading, so WorksFr can't check "
+                "this page. Paste the code or upload the notebook instead."
+            )
         if status >= 400:
             raise ExtractionError(f"Fetching {url} returned HTTP {status}")
         return url, content
@@ -49,8 +61,12 @@ def extract_notebook(filename: str, data: bytes) -> Extraction:
     return parse_notebook(filename, data, source_kind=SourceKind.NOTEBOOK)
 
 
-def extract_url(url: str, client: httpx.Client) -> Extraction:
-    """Fetch and parse a tutorial URL. Raises ExtractionError when that is not possible."""
+def extract_url(url: str, client: httpx.Client, settings: Settings | None = None) -> Extraction:
+    """Fetch and parse a tutorial URL. Raises ExtractionError when that is not possible.
+
+    With `settings`, a generic page that loads fine but holds no code may be read through a
+    configured page reader (JavaScript-rendered pages only; see reader.py).
+    """
     check_url(url)
     route = route_url(url)
 
@@ -77,7 +93,23 @@ def extract_url(url: str, client: httpx.Client) -> Extraction:
         )
 
     title, published = page_metadata(content, url)
-    blocks = build_blocks(parse_html_blocks(content))
+    raws = parse_html_blocks(content)
+    if not raws and settings is not None:
+        page = read_page(url, settings, client)
+        if page is not None:
+            blocks = build_blocks(page.blocks)
+            return Extraction(
+                source_kind=SourceKind.URL,
+                source_format=SourceFormat.HTML,
+                source=url,
+                title=page.title or title,
+                published=published,
+                date_source=DateSource.PAGE if published else DateSource.UNKNOWN,
+                blocks=blocks,
+                packages=detect_packages(blocks),
+                fetched_via=page.provider,
+            )
+    blocks = build_blocks(raws)
     return Extraction(
         source_kind=SourceKind.URL,
         source_format=SourceFormat.HTML,

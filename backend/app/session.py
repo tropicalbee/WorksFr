@@ -1,7 +1,7 @@
 """Run and replay steps while keeping sandbox mechanics out of the pipeline."""
 
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from types import TracebackType
 from typing import Self
 
@@ -32,13 +32,20 @@ class CheckTimeoutError(Exception):
 
 class CheckSession:
     def __init__(
-        self, sandbox: Sandbox, settings: Settings, *, clock: Callable[[], float] = time.monotonic
+        self,
+        sandbox: Sandbox,
+        settings: Settings,
+        *,
+        clock: Callable[[], float] = time.monotonic,
+        guessed_packages: Collection[str] = (),
     ) -> None:
         self.sandbox, self.settings, self._clock = sandbox, settings, clock
+        self._guessed_packages = tuple(guessed_packages)
         self._environment: Environment | None = None
         self._deadline: float | None = None
         self._ledger: list[tuple[int, str]] = []
         self._unbound: dict[str, int] = {}
+        self._unverified_sources: set[int] = set()
         self._probe_id = 0
         self._closed = False
 
@@ -55,6 +62,12 @@ class CheckSession:
     def _check_deadline(self) -> None:
         if self._deadline is not None and self._clock() >= self._deadline:
             raise CheckTimeoutError("The check exceeded its time limit")
+
+    def seconds_left(self) -> float | None:
+        """Seconds until the check deadline, or None before the session has started."""
+        if self._deadline is None:
+            return None
+        return self._deadline - self._clock()
 
     def start(self, packages: list[str]) -> Environment:
         self._check_deadline()
@@ -79,6 +92,14 @@ class CheckSession:
         if result.error is not None and result.error.type == "ProtocolError":
             raise SandboxError("Runner protocol error")
 
+    def _record_unbound(self, step: Step, decision: LabelDecision) -> None:
+        if decision.label not in (Label.BROKEN, Label.CANT_VERIFY):
+            return
+        for name in step.bound_names():
+            self._unbound.setdefault(name, step.idx)
+        if decision.label == Label.CANT_VERIFY:
+            self._unverified_sources.add(step.idx)
+
     def run(self, step: Step) -> LabelDecision:
         self._check_deadline()
         if not step.runnable:
@@ -89,6 +110,7 @@ class CheckSession:
         decision = precheck(code)
         if decision is not None:
             step.record_run(None, decision)
+            self._record_unbound(step, decision)
             return decision
         try:
             result = self.sandbox.exec(f"s{step.idx}", code)
@@ -96,23 +118,25 @@ class CheckSession:
             self._restart(self._ledger)
             decision = label_step(None, timed_out=True)
             step.record_run(None, decision)
+            self._record_unbound(step, decision)
             return decision
         self._check_deadline()
         self._check_protocol(result)
         source = cascade_source(result.error, self._unbound)
         decision = (
-            cascade_decision(source)
+            cascade_decision(
+                source, Label.CANT_VERIFY if source in self._unverified_sources else Label.BROKEN
+            )
             if source is not None
             else label_step(
                 result,
                 failed_packages=self.environment.failed_packages,
+                guessed_packages=self._guessed_packages,
             )
         )
         self._ledger.append((step.idx, code))
         step.record_run(result, decision)
-        if decision.label == Label.BROKEN:
-            for name in step.bound_names():
-                self._unbound.setdefault(name, step.idx)
+        self._record_unbound(step, decision)
         return decision
 
     def try_patch(
@@ -130,7 +154,11 @@ class CheckSession:
             return None, decision, verdict
         self._check_deadline()
         self._check_protocol(result)
-        decision, verdict = judge_patch(result, failed_packages=self.environment.failed_packages)
+        decision, verdict = judge_patch(
+            result,
+            failed_packages=self.environment.failed_packages,
+            guessed_packages=self._guessed_packages,
+        )
         return result, decision, verdict
 
     def accept(self, step: Step, attempt: RepairAttempt) -> None:

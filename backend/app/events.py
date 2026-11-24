@@ -22,6 +22,10 @@ class EventBlock(BaseModel):
     idx: int
     kind: StepKind
     code: str
+    video_timestamp: int | None = None
+    low_confidence: bool = False
+    read_agreement: int | None = None
+    read_agreement: int | None = None
 
 
 class ExtractedEvent(BaseModel):
@@ -61,6 +65,12 @@ class RepairAttemptEvent(BaseModel):
     attempt: RepairAttempt
 
 
+class RateLimitWaitEvent(BaseModel):
+    type: Literal["rate_limit_wait"] = "rate_limit_wait"
+    provider: str
+    seconds: float
+
+
 class StepFinalEvent(BaseModel):
     type: Literal["step_final"] = "step_final"
     step: StepReport
@@ -82,6 +92,7 @@ CheckEvent = Annotated[
     | StepStartedEvent
     | StepResultEvent
     | RepairAttemptEvent
+    | RateLimitWaitEvent
     | StepFinalEvent
     | DoneEvent
     | FailedEvent,

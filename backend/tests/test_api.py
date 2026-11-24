@@ -146,3 +146,26 @@ def test_sse_completion_during_replay_is_not_lost(
     )
     schemas = client.get("/openapi.json").json()["components"]["schemas"]
     assert all(name in schemas for name in ("StoredEvent", "DoneEvent", "RepairAttemptEvent"))
+
+
+def test_paste_route_returns_a_check_id(client: TestClient) -> None:
+    response = client.post(
+        "/api/checks/code", json={"code": "x = 1\n\nprint(x)\n", "title": "My paste"}
+    )
+    assert response.status_code == 200
+    check_id = response.json()["check_id"]
+    report = client.get(f"/api/checks/{check_id}").json()
+    assert report["source_kind"] == "paste"
+    assert report["source"] == "Pasted code"
+    assert report["title"] == "My paste"
+    assert report["status"] == "done"
+    assert len(report["steps"]) == 2
+    assert client.post("/api/checks/code", json={"code": "x = 1"}).status_code == 200
+
+
+def test_paste_route_rejects_empty_and_oversized_code(client: TestClient) -> None:
+    for code in ("", "  \n\t", "x" * 200_001):
+        response = client.post("/api/checks/code", json={"code": code})
+        assert response.status_code == 422
+        assert isinstance(response.json()["detail"], str)
+    assert client.post("/api/checks/code", json={"code": "x" * 200_000}).status_code == 200

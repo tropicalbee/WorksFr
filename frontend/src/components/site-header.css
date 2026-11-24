@@ -1,0 +1,29 @@
+/* Sticky site header. The header spans the full width; its inner row is centred to match the page below. */
+.site-header { position: sticky; top: 0; z-index: 30; border-bottom: 1px solid transparent; background: transparent; transition: background-color 150ms ease-out, border-color 150ms ease-out; }
+.site-header[data-scrolled='true'] { background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom-color: var(--border); }
+.site-header-inner { display: flex; align-items: center; gap: 28px; height: 64px; margin: 0 auto; width: min(1240px, calc(100% - 64px)); }
+.site-header[data-width='report'] .site-header-inner { width: min(1080px, calc(100% - 96px)); }
+@media (max-width: 900px) { .site-header-inner { width: calc(100% - 32px); } }
+@media (max-width: 1023px) { .site-header[data-width='report'] .site-header-inner { width: calc(100% - 48px); } }
+.site-header[data-scrolled='true']::before { background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom-color: var(--border); }
+.site-header .wordmark { margin-right: 4px; }
+.site-header-links { display: flex; align-items: center; gap: 16px; }
+.site-header-links nav { display: flex; align-items: center; gap: 24px; }
+.site-header-links a { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; color: var(--text-3); font-size: 14px; font-weight: 500; }
+.site-header-links a:hover, .site-header-links a[aria-current='page'] { color: var(--text); }
+.site-header-links svg { width: 16px; height: 16px; }
+.site-header-github { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 8px; color: var(--text-3); }
+.site-header-github:hover { color: var(--text); }
+.site-header-github svg { width: 18px; height: 18px; }
+.site-header-github + .site-header-cta { margin-left: 8px; }
+.mobile-menu-panel .mobile-menu-github svg { width: 16px; height: 16px; }
+.site-header-cta { margin-left: auto; display: inline-flex; align-items: center; height: 34px; padding: 0 14px; border: 1px solid var(--text); border-radius: 8px; background: var(--text); color: var(--bg); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.site-header-cta:hover { color: var(--bg); background: var(--text-2); border-color: var(--text-2); }
+.site-header .mobile-menu-trigger { display: none; margin-left: auto; }
+.mobile-menu-panel .mobile-menu-cta { margin-top: 4px; justify-content: center; background: var(--text); color: var(--bg); font-weight: 600; }
+.mobile-menu-panel .mobile-menu-cta:hover { background: var(--text-2); color: var(--bg); }
+@media (max-width: 767px) {
+  .site-header .sh-desktop { display: none; }
+  .site-header .mobile-menu-trigger { display: inline-flex; }
+}
+@media (prefers-reduced-motion: reduce) { .site-header { transition: none; } }

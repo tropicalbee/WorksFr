@@ -5,17 +5,20 @@ export type CheckEvent = components['schemas']['StoredEvent']['event']
 export type LiveCheck = {
   report: components['schemas']['CheckReport']
   live: ReportLiveState
+  wait: { provider: string; endsAt: number } | null
   lastSeq: number
 }
 
 export function initialLiveCheck(report: LiveCheck['report']): LiveCheck {
-  return { report, live: { runningStepIndex: null, pendingBlocks: [] }, lastSeq: 0 }
+  return { report, live: { runningStepIndex: null, pendingBlocks: [] }, wait: null, lastSeq: 0 }
 }
 
-export function applyEvent(state: LiveCheck, seq: number, event: CheckEvent): LiveCheck {
+export function applyEvent(state: LiveCheck, seq: number, event: CheckEvent, nowMs = 0): LiveCheck {
   if (seq <= state.lastSeq) return state
-  const next = { ...state, lastSeq: seq }
+  const next: LiveCheck = { ...state, lastSeq: seq, wait: null }
   switch (event.type) {
+    case 'rate_limit_wait':
+      return { ...next, wait: { provider: event.provider, endsAt: nowMs + event.seconds * 1000 } }
     case 'extracted':
       return {
         ...next,

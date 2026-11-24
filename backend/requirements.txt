@@ -10,3 +10,4 @@ lxml>=5.0
 nbformat>=5.10
 openai>=1.0
 packaging>=24.0
+mcp>=2.3

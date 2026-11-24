@@ -1,0 +1,18 @@
+{
+  "model": "gemini-3.6-flash",
+  "input": [
+    {
+      "type": "text",
+      "text": "You are reading a programming tutorial video. List every block of code visible on screen in this clip, copied exactly as shown, in the order it appears. Do not fix, complete or invent code. If a block is cut off, copy only what is visible and set partial to true. For each block give start_seconds (when it first appears), kind (python, shell or output), code, and partial. Return only JSON: {\"blocks\": [...]}."
+    },
+    {
+      "type": "video",
+      "uri": "https://www.youtube.com/watch?v=CbpsDMwFG2g",
+      "processing": {
+        "type": "static",
+        "start_offset": "600s",
+        "end_offset": "900s"
+      }
+    }
+  ]
+}

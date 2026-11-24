@@ -40,6 +40,7 @@ class PatchVerdict(StrEnum):
 class SourceKind(StrEnum):
     URL = "url"
     NOTEBOOK = "notebook"
+    PASTE = "paste"
 
 
 class SourceFormat(StrEnum):
@@ -47,6 +48,8 @@ class SourceFormat(StrEnum):
     NOTEBOOK = "notebook"
     GITHUB_README = "github_readme"
     STACKOVERFLOW = "stackoverflow"
+    VIDEO = "video"
+    PASTE = "paste"
 
 
 class DateSource(StrEnum):
@@ -76,19 +79,27 @@ class Block(BaseModel):
     `!` and `%` lines removed. None for kinds that never run (shell, output, other)."""
     context: str = ""
     """Prose or Markdown just before the block, used as context for explanations."""
+    video_timestamp: int | None = None
+    """Whole seconds from the start of the video, when recovered from video."""
+    low_confidence: bool = False
+    """Whether the block was transcribed from video and may have been misread."""
+    read_agreement: int | None = None
+    """How many independent video reads saw this block. None for other sources."""
 
 
 class Extraction(BaseModel):
     source_kind: SourceKind
     source_format: SourceFormat
     source: str
-    """The URL, or the uploaded notebook's file name."""
+    """The URL, the uploaded notebook's file name, or "Pasted code"."""
     title: str | None = None
     published: date | None = None
     date_source: DateSource = DateSource.UNKNOWN
     blocks: list[Block]
     packages: list[str]
     """Sorted PyPI names, standard library excluded, version pins dropped."""
+    fetched_via: str | None = None
+    """Name of the page reader that supplied the content, or None for a direct fetch."""
 
 
 # Sandbox runner replies (see ARCHITECTURE.md, "Runner protocol")
@@ -218,7 +229,7 @@ class StepReport(BaseModel):
     original_code: str
     """The block as published."""
     final_code: str
-    """What the downloads show: the published code with the accepted patch applied and
+    """The published code with the accepted patch applied and
     notebook `!`/`%` lines kept. Equal to `original_code` when nothing was fixed."""
     label: Label | None = None
     """The label of the original run. None for blocks that never run. A fixed step keeps
@@ -233,6 +244,12 @@ class StepReport(BaseModel):
     output: str = ""
     error: ErrorInfo | None = None
     warnings: list[WarningInfo] = Field(default_factory=list)
+    video_timestamp: int | None = None
+    """Whole seconds from the start of the video, when recovered from video."""
+    low_confidence: bool = False
+    """Whether the step was transcribed from video and may have been misread."""
+    read_agreement: int | None = None
+    """How many independent video reads saw this step's code. None for other sources."""
 
     @property
     def fixed(self) -> bool:
@@ -245,6 +262,8 @@ class InstallPin(BaseModel):
     package: str
     pinned: str
     used: str | None
+    origin: Literal["install_line", "pip_output"] = "install_line"
+    """Whether the version came from an install command or pip output."""
 
 
 class CheckReport(BaseModel):
@@ -255,6 +274,8 @@ class CheckReport(BaseModel):
     published: date | None = None
     date_source: DateSource = DateSource.UNKNOWN
     status: CheckStatus
+    created_at: str = ""
+    """When the check was created, ISO 8601 UTC. Set by storage; empty before it is stored."""
     score: Score | None = None
     versions: dict[str, str] = Field(default_factory=dict)
     """Installed version of each requested package, keyed by its PyPI name."""

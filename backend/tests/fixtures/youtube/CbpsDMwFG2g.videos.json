@@ -1,0 +1,66 @@
+{
+  "kind": "youtube#videoListResponse",
+  "etag": "ABOGhUlGGIE27ZB9TnW8aSWUALI",
+  "items": [
+    {
+      "kind": "youtube#video",
+      "etag": "CWNzAjLj8HV9rfjJ8JrB39SR_gE",
+      "id": "CbpsDMwFG2g",
+      "snippet": {
+        "publishedAt": "2023-06-30T13:17:43Z",
+        "channelId": "UCNU_lfiiWBdtULKOw6X0Dig",
+        "title": "OpenAI API With Python Tuorial 1-ChatCompletion API and Completion API",
+        "description": "github code: https://github.com/krishnaik06/OPENAI-API-Tutorials\nWelcome to the OpenAI Tutorials with Python, your gateway to unleashing the immense potential of Artificial Intelligence (AI). In this comprehensive video series, we dive deep into the world of OpenAI, an industry-leading AI research organization, and guide you step-by-step through various practical applications using Python.\n\nWhether you're a beginner or an experienced developer, this tutorial series is designed to empower you with the knowledge and skills to harness the power of AI and machine learning. We cover a wide range of topics, including natural language processing (NLP), computer vision, reinforcement learning, and much more.\n►Data Science Projects: \nhttps://www.youtube.com/watch?v=S_F_c9e2bz4&list=PLZoTAELRMXVPS-dOaVbAux22vzqdgoGhG&pp=iAQB\n\n►Learn In One Tutorials\n\nStatistics in 6 hours: https://www.youtube.com/watch?v=LZzq1zSL1bs&t=9522s&pp=ygUVa3Jpc2ggbmFpayBzdGF0aXN0aWNz\n\nMachine Learning In 6 Hours: https://www.youtube.com/watch?v=JxgmHe2NyeY&t=4733s&pp=ygUba3Jpc2ggbmFpayBtYWNoaW5lIGxlYXJuaW5n\n\nDeep Learning 5 hours : https://www.youtube.com/watch?v=d2kxUVwWWwU&t=1210s&pp=ygUYa3Jpc2ggbmFpayBkZWVwIGxlYXJuaW5n\n\n\n►Learn In a Week Playlist\n\nStatistics:https://www.youtube.com/watch?v=11unm2hmvOQ&list=PLZoTAELRMXVMgtxAboeAx-D9qbnY94Yay\n\nMachine Learning : https://www.youtube.com/watch?v=z8sxaUw_f-M&list=PLZoTAELRMXVPjaAzURB77Kz0YXxj65tYz\n\nDeep Learning:https://www.youtube.com/watch?v=8arGWdq_KL0&list=PLZoTAELRMXVPiyueAqA_eQnsycC_DSBns\n\nNLP : https://www.youtube.com/watch?v=w3coRFpyddQ&list=PLZoTAELRMXVNNrHSKv36Lr3_156yCo6Nn\n\n►Detailed Playlist:\n\nStats For Data Science In Hindi : https://www.youtube.com/watch?v=7y3XckjaVOw&list=PLTDARY42LDV6YHSRo669_uDDGmUEmQnDJ&pp=gAQB\n\nMachine Learning In English : https://www.youtube.com/watch?v=bPrmA1SEN2k&list=PLZoTAELRMXVPBTrWtJkn3wWQxZkmTXGwe\n\nMachine Learning In Hindi : https://www.youtube.com/watch?v=7uwa9aPbBRU&list=PLTDARY42LDV7WGmlzZtY-w9pemyPrKNUZ&pp=gAQB\n\nComplete Deep Learning: https://www.youtube.com/watch?v=YFNKnUhm_-s&list=PLZoTAELRMXVPGU70ZGsckrMdr0FteeRUi",
+        "thumbnails": {
+          "default": {
+            "url": "https://i.ytimg.com/vi/CbpsDMwFG2g/default.jpg",
+            "width": 120,
+            "height": 90
+          },
+          "medium": {
+            "url": "https://i.ytimg.com/vi/CbpsDMwFG2g/mqdefault.jpg",
+            "width": 320,
+            "height": 180
+          },
+          "high": {
+            "url": "https://i.ytimg.com/vi/CbpsDMwFG2g/hqdefault.jpg",
+            "width": 480,
+            "height": 360
+          },
+          "standard": {
+            "url": "https://i.ytimg.com/vi/CbpsDMwFG2g/sddefault.jpg",
+            "width": 640,
+            "height": 480
+          },
+          "maxres": {
+            "url": "https://i.ytimg.com/vi/CbpsDMwFG2g/maxresdefault.jpg",
+            "width": 1280,
+            "height": 720
+          }
+        },
+        "channelTitle": "Krish Naik",
+        "tags": [
+          "yt:cc=on",
+          "openai tutorials",
+          "code generation using openai",
+          "chatcompletion api",
+          "completion api",
+          "machine learning using openai",
+          "data science tutorials"
+        ],
+        "categoryId": "27",
+        "liveBroadcastContent": "none",
+        "defaultLanguage": "en",
+        "localized": {
+          "title": "OpenAI API With Python Tuorial 1-ChatCompletion API and Completion API",
+          "description": "github code: https://github.com/krishnaik06/OPENAI-API-Tutorials\nWelcome to the OpenAI Tutorials with Python, your gateway to unleashing the immense potential of Artificial Intelligence (AI). In this comprehensive video series, we dive deep into the world of OpenAI, an industry-leading AI research organization, and guide you step-by-step through various practical applications using Python.\n\nWhether you're a beginner or an experienced developer, this tutorial series is designed to empower you with the knowledge and skills to harness the power of AI and machine learning. We cover a wide range of topics, including natural language processing (NLP), computer vision, reinforcement learning, and much more.\n►Data Science Projects: \nhttps://www.youtube.com/watch?v=S_F_c9e2bz4&list=PLZoTAELRMXVPS-dOaVbAux22vzqdgoGhG&pp=iAQB\n\n►Learn In One Tutorials\n\nStatistics in 6 hours: https://www.youtube.com/watch?v=LZzq1zSL1bs&t=9522s&pp=ygUVa3Jpc2ggbmFpayBzdGF0aXN0aWNz\n\nMachine Learning In 6 Hours: https://www.youtube.com/watch?v=JxgmHe2NyeY&t=4733s&pp=ygUba3Jpc2ggbmFpayBtYWNoaW5lIGxlYXJuaW5n\n\nDeep Learning 5 hours : https://www.youtube.com/watch?v=d2kxUVwWWwU&t=1210s&pp=ygUYa3Jpc2ggbmFpayBkZWVwIGxlYXJuaW5n\n\n\n►Learn In a Week Playlist\n\nStatistics:https://www.youtube.com/watch?v=11unm2hmvOQ&list=PLZoTAELRMXVMgtxAboeAx-D9qbnY94Yay\n\nMachine Learning : https://www.youtube.com/watch?v=z8sxaUw_f-M&list=PLZoTAELRMXVPjaAzURB77Kz0YXxj65tYz\n\nDeep Learning:https://www.youtube.com/watch?v=8arGWdq_KL0&list=PLZoTAELRMXVPiyueAqA_eQnsycC_DSBns\n\nNLP : https://www.youtube.com/watch?v=w3coRFpyddQ&list=PLZoTAELRMXVNNrHSKv36Lr3_156yCo6Nn\n\n►Detailed Playlist:\n\nStats For Data Science In Hindi : https://www.youtube.com/watch?v=7y3XckjaVOw&list=PLTDARY42LDV6YHSRo669_uDDGmUEmQnDJ&pp=gAQB\n\nMachine Learning In English : https://www.youtube.com/watch?v=bPrmA1SEN2k&list=PLZoTAELRMXVPBTrWtJkn3wWQxZkmTXGwe\n\nMachine Learning In Hindi : https://www.youtube.com/watch?v=7uwa9aPbBRU&list=PLTDARY42LDV7WGmlzZtY-w9pemyPrKNUZ&pp=gAQB\n\nComplete Deep Learning: https://www.youtube.com/watch?v=YFNKnUhm_-s&list=PLZoTAELRMXVPGU70ZGsckrMdr0FteeRUi"
+        },
+        "defaultAudioLanguage": "en"
+      }
+    }
+  ],
+  "pageInfo": {
+    "totalResults": 1,
+    "resultsPerPage": 1
+  }
+}

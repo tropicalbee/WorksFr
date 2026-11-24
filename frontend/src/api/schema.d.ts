@@ -22,6 +22,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/checks/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Code */
+        post: operations["submit_code_api_checks_code_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/checks/notebook": {
         parameters: {
             query?: never;
@@ -135,6 +152,11 @@ export interface components {
             /** @default unknown */
             date_source: components["schemas"]["DateSource"];
             status: components["schemas"]["CheckStatus"];
+            /**
+             * Created At
+             * @default
+             */
+            created_at: string;
             score?: components["schemas"]["Score"] | null;
             /** Versions */
             versions?: {
@@ -154,6 +176,13 @@ export interface components {
          * @enum {string}
          */
         CheckStatus: "running" | "done" | "failed";
+        /** CodeSubmission */
+        CodeSubmission: {
+            /** Code */
+            code: string;
+            /** Title */
+            title?: string | null;
+        };
         /**
          * DateSource
          * @enum {string}
@@ -203,6 +232,15 @@ export interface components {
             kind: components["schemas"]["StepKind"];
             /** Code */
             code: string;
+            /** Video Timestamp */
+            video_timestamp?: number | null;
+            /**
+             * Low Confidence
+             * @default false
+             */
+            low_confidence: boolean;
+            /** Read Agreement */
+            read_agreement?: number | null;
         };
         /** ExecResult */
         ExecResult: {
@@ -279,6 +317,12 @@ export interface components {
             pinned: string;
             /** Used */
             used: string | null;
+            /**
+             * Origin
+             * @default install_line
+             * @enum {string}
+             */
+            origin: "install_line" | "pip_output";
         };
         /**
          * Label
@@ -300,6 +344,18 @@ export interface components {
          * @enum {string}
          */
         PatchVerdict: "fixed" | "fixed_unverified" | "failed";
+        /** RateLimitWaitEvent */
+        RateLimitWaitEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "rate_limit_wait";
+            /** Provider */
+            provider: string;
+            /** Seconds */
+            seconds: number;
+        };
         /** RepairAttempt */
         RepairAttempt: {
             /** Attempt */
@@ -373,7 +429,7 @@ export interface components {
          * SourceKind
          * @enum {string}
          */
-        SourceKind: "url" | "notebook";
+        SourceKind: "url" | "notebook" | "paste";
         /** StepFinalEvent */
         StepFinalEvent: {
             /**
@@ -421,6 +477,15 @@ export interface components {
             error?: components["schemas"]["ErrorInfo"] | null;
             /** Warnings */
             warnings?: components["schemas"]["WarningInfo"][];
+            /** Video Timestamp */
+            video_timestamp?: number | null;
+            /**
+             * Low Confidence
+             * @default false
+             */
+            low_confidence: boolean;
+            /** Read Agreement */
+            read_agreement?: number | null;
         };
         /** StepResultEvent */
         StepResultEvent: {
@@ -457,7 +522,7 @@ export interface components {
             /** Check Id */
             check_id: string;
             /** Event */
-            event: components["schemas"]["ExtractedEvent"] | components["schemas"]["EnvironmentEvent"] | components["schemas"]["StepStartedEvent"] | components["schemas"]["StepResultEvent"] | components["schemas"]["RepairAttemptEvent"] | components["schemas"]["StepFinalEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["FailedEvent"];
+            event: components["schemas"]["ExtractedEvent"] | components["schemas"]["EnvironmentEvent"] | components["schemas"]["StepStartedEvent"] | components["schemas"]["StepResultEvent"] | components["schemas"]["RepairAttemptEvent"] | components["schemas"]["RateLimitWaitEvent"] | components["schemas"]["StepFinalEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["FailedEvent"];
         };
         /** URLSubmission */
         URLSubmission: {
@@ -535,6 +600,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["URLSubmission"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_code_api_checks_code_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeSubmission"];
             };
         };
         responses: {

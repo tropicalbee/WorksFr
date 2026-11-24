@@ -98,3 +98,21 @@ def test_deadline_and_protocol_failure() -> None:
         with pytest.raises(CheckTimeoutError):
             session.run(step(1, "42"))
         assert session.probe("json", "dump") is None
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "train_data = open('missing-cascade-data.csv').read()",
+        "train_data = input()",
+        "import time\ntime.sleep(10)\ntrain_data = 1",
+    ],
+)
+def test_unverified_source_and_transitive_dependents(session: CheckSession, source: str) -> None:
+    assert session.run(step(0, source)).label == Label.CANT_VERIFY
+    dependent = session.run(step(1, "processed = train_data.copy()"))
+    assert dependent.label == Label.CANT_VERIFY
+    assert dependent.reason == "depends on step 1, which couldn't be verified"
+    transitive = session.run(step(2, "print(processed)"))
+    assert transitive.label == Label.CANT_VERIFY
+    assert transitive.reason == "depends on step 2, which couldn't be verified"

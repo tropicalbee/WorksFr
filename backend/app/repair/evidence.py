@@ -13,7 +13,7 @@ import re
 import textwrap
 from collections.abc import Callable
 from typing import Literal, Protocol
-from urllib.parse import urlparse
+from urllib.parse import urldefrag, urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -31,6 +31,7 @@ RENDER_CAP = 12000
 SNIPPET_CHARS = 600
 MAX_SNIPPETS = 5
 MAX_PROBES = 3
+MAX_VERSION_PAGES = 8
 MAX_WARNINGS = 5
 FETCH_TIMEOUT = 15.0
 TAVILY_URL = "https://api.tavily.com/search"
@@ -94,6 +95,7 @@ class Evidence(BaseModel):
 
 _STEP_FRAME = re.compile(r'File "<step-[^"]*>", line (\d+)')
 _RE_ATTR = re.compile(r"has no attribute '([^']+)'")
+_RE_OBJECT_ATTR = re.compile(r"'(\w+)' object has no attribute '(\w+)'")
 _RE_MODULE_ATTR = re.compile(r"module '([^']+)' has no attribute '([^']+)'")
 _RE_IMPORT_NAME = re.compile(r"cannot import name '([^']+)' from '([^']+)'")
 _RE_NO_MODULE = re.compile(r"No module named '([^']+)'")
@@ -250,6 +252,8 @@ def _plan_probes(code: str, error: ErrorInfo, context_code: str) -> list[tuple[s
 
 _GITHUB_REPO = re.compile(r"https?://(?:www\.)?github\.com/([^/\s#?]+)/([^/\s#?]+)")
 _CHANGELOG_KEYS = ("change", "release", "history", "news", "migration")
+_HREF_VERSION = re.compile(r"^v?(\d+(?:\.\d+)+)\.html?$", re.IGNORECASE)
+_TEXT_VERSION = re.compile(r"new in v?(\d+(?:\.\d+)+)", re.IGNORECASE)
 
 
 def _fetch(
@@ -329,7 +333,12 @@ def _parse_version(tag: str) -> Version | None:
 def _snippets(text: str, names: list[str], limit: int) -> list[str]:
     """Windows of about SNIPPET_CHARS around mentions of any name, non-overlapping."""
     lowered = text.lower()
-    hits = sorted(pos for name in names if name for pos in [lowered.find(name.lower())] if pos >= 0)
+    hits = sorted(
+        match.start()
+        for name in names
+        if name
+        for match in re.finditer(re.escape(name.lower()), lowered)
+    )
     found: list[str] = []
     last_end = 0
     for pos in hits:
@@ -352,6 +361,32 @@ def _page_text(raw: str) -> str:
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
     return re.sub(r"\n\s*\n+", "\n\n", soup.get_text("\n"))
+
+
+def _version_pages(raw: str, index_url: str, installed: str | None) -> list[tuple[Version, str]]:
+    """Minor-release pages linked from a release-notes index, newest first.
+
+    Only same-host links count. Pages newer than `installed` and patch or pre-releases
+    are dropped, and at most MAX_VERSION_PAGES are returned.
+    """
+    limit = _parse_version(installed) if installed else None
+    host = urlparse(index_url).hostname
+    found: dict[str, Version] = {}
+    for link in BeautifulSoup(raw, "html.parser").find_all("a", href=True):
+        url = urldefrag(urljoin(index_url, str(link["href"])))[0]
+        if url == index_url or urlparse(url).hostname != host:
+            continue
+        match = _HREF_VERSION.match(url.rsplit("/", 1)[-1]) or _TEXT_VERSION.search(
+            link.get_text(" ", strip=True)
+        )
+        version = _parse_version(match.group(1)) if match else None
+        if version is None or version.micro != 0 or version.is_prerelease:
+            continue
+        if limit is not None and version > limit:
+            continue
+        found.setdefault(url, version)
+    ranked = sorted(found.items(), key=lambda pair: pair[1], reverse=True)
+    return [(version, url) for url, version in ranked[:MAX_VERSION_PAGES]]
 
 
 def _release_items(
@@ -442,14 +477,48 @@ def _changelog_evidence(
         raw = _fetch(url, client, cache, package, installed, "changelog")
         if raw is None:
             continue
-        for snippet in _snippets(_page_text(raw), names, MAX_SNIPPETS):
+        snippets = _snippets(_page_text(raw), names, MAX_SNIPPETS)
+        for snippet in snippets:
             items.append(
                 EvidenceItem(
                     source="changelog", title=f"{package} changelog", content=snippet, url=url
                 )
             )
+        if not snippets:
+            items.extend(_version_page_items(raw, url, package, installed, names, client, cache))
         break
     return items
+
+
+def _version_page_items(
+    raw: str,
+    index_url: str,
+    package: str,
+    installed: str | None,
+    names: list[str],
+    client: httpx.Client,
+    cache: DocCache,
+) -> list[EvidenceItem]:
+    """Follow per-version links from an index page and stop at the first page that matches."""
+    pages = _version_pages(raw, index_url, installed)
+    qualified = [name for name in names if "." in name]
+    for wanted in (qualified, names) if qualified else (names,):
+        for version, page_url in pages:
+            page = _fetch(page_url, client, cache, package, installed, "changelog")
+            if page is None:
+                continue
+            snippets = _snippets(_page_text(page), wanted, MAX_SNIPPETS)
+            if snippets:
+                return [
+                    EvidenceItem(
+                        source="changelog",
+                        title=f"{package} {version} release notes",
+                        content=snippet,
+                        url=page_url,
+                    )
+                    for snippet in snippets
+                ]
+    return []
 
 
 def search_evidence(
@@ -537,6 +606,16 @@ def _probe_item(probe_id: str, target: str, name: str, reply: ProbeResult) -> Ev
     )
 
 
+def _qualified_names(pairs: list[tuple[str, str]]) -> list[str]:
+    """`Type.name` for each probe pair whose target ends in a type name, such as DataFrame."""
+    qualified: list[str] = []
+    for target, name in pairs:
+        owner = target.rsplit(".", 1)[-1]
+        if owner[:1].isupper():
+            qualified.append(f"{owner}.{name}")
+    return qualified
+
+
 def gather(
     code: str,
     result: ExecResult,
@@ -595,7 +674,10 @@ def gather(
         for package in _error_packages(error, modules):
             packages.setdefault(dist_for_import(package), None)
     known = {normalize(k): v for k, v in versions.items()}
-    names = [name for _, name in pairs]
+    from_message = _RE_OBJECT_ATTR.search(error.message or "")
+    typed = [f"{from_message.group(1)}.{from_message.group(2)}"] if from_message else []
+    names = typed + _qualified_names(pairs) + [name for _, name in pairs]
+    names = list(dict.fromkeys(names))
     if not names:
         match = _RE_ATTR.search(error.message) or _RE_KWARG.search(error.message)
         names = [match.group(1)] if match else []

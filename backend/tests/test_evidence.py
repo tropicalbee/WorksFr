@@ -1,6 +1,7 @@
 """Tests for repair evidence gathering. Network, sandbox and cache are all fakes."""
 
 import json
+from pathlib import Path
 
 import httpx
 import pytest
@@ -18,6 +19,7 @@ from app.repair.evidence import (
     RENDER_CAP,
     Evidence,
     EvidenceItem,
+    _snippets,
     changelog_evidence,
     gather,
     plan_probes,
@@ -554,3 +556,165 @@ def test_gather_passes_context_code() -> None:
         context_code="from keras.optimizers import Adam\n",
     )
     assert sb.probes == [("p1", "keras.optimizers", "Adam")]
+
+
+# changelog_evidence: version pages linked from a release-notes index
+
+EVIDENCE_DIR = Path(__file__).parent / "fixtures" / "evidence"
+PANDAS_INDEX = "https://pandas.pydata.org/docs/whatsnew/index.html"
+PANDAS_BASE = "https://pandas.pydata.org/docs/whatsnew/"
+
+
+class PagesNet:
+    """Serves a pandas-like PyPI reply, an index page and version pages; records the calls."""
+
+    def __init__(self, index_html: str, pages: dict[str, str] | None = None) -> None:
+        self.index_html = index_html
+        self.pages = pages or {}
+        self.calls: list[str] = []
+
+    def handler(self, request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        self.calls.append(url)
+        if url == "https://pypi.org/pypi/pandas/json":
+            urls = {"Changelog": PANDAS_INDEX}
+            return httpx.Response(200, json={"info": {"project_urls": urls}})
+        if url == PANDAS_INDEX:
+            return httpx.Response(200, text=self.index_html)
+        if url in self.pages:
+            return httpx.Response(200, text=self.pages[url])
+        return httpx.Response(404)
+
+    def client(self) -> httpx.Client:
+        return httpx.Client(transport=httpx.MockTransport(self.handler))
+
+    def page_calls(self) -> list[str]:
+        return [c for c in self.calls if c.startswith(PANDAS_BASE) and c != PANDAS_INDEX]
+
+
+def index_with(hrefs: list[str]) -> str:
+    links = "".join(f'<li><a href="{h}">What is new</a></li>' for h in hrefs)
+    return f"<html><body><ul>{links}</ul></body></html>"
+
+
+def test_changelog_follows_version_page_from_index() -> None:
+    index = (EVIDENCE_DIR / "pandas_whatsnew_index.html").read_text(encoding="utf8")
+    v200 = (EVIDENCE_DIR / "pandas_whatsnew_v2.0.0.html").read_text(encoding="utf8")
+    net = PagesNet(index, {PANDAS_BASE + "v2.0.0.html": v200})
+    items = changelog_evidence("pandas", "3.1.1", ["append"], net.client(), MemCache())
+    assert items
+    assert items[0].source == "changelog"
+    assert items[0].url == PANDAS_BASE + "v2.0.0.html"
+    assert items[0].title == "pandas 2.0.0 release notes"
+    assert any("concat" in item.content for item in items)
+    assert net.page_calls()[0] == PANDAS_BASE + "v3.1.0.html"
+
+
+def test_changelog_skips_newer_and_patch_pages() -> None:
+    index = index_with(["v3.0.0.html", "v2.2.0.html", "v2.1.1.html", "v2.1.0.html", "v2.0.0.html"])
+    net = PagesNet(index)
+    changelog_evidence("pandas", "2.1.2", ["append"], net.client(), MemCache())
+    assert net.page_calls() == [PANDAS_BASE + "v2.1.0.html", PANDAS_BASE + "v2.0.0.html"]
+
+
+def test_changelog_fetches_at_most_eight_version_pages() -> None:
+    net = PagesNet(index_with([f"v1.{minor}.0.html" for minor in range(12)]))
+    items = changelog_evidence("pandas", "1.20.0", ["append"], net.client(), MemCache())
+    assert items == []
+    assert net.page_calls() == [PANDAS_BASE + f"v1.{minor}.0.html" for minor in range(11, 3, -1)]
+
+
+def test_changelog_ignores_links_to_other_hosts() -> None:
+    other = "https://evil.example.com/v2.0.0.html"
+    net = PagesNet(index_with([other, "v1.0.0.html"]), {other: "append concat"})
+    items = changelog_evidence("pandas", "3.0.0", ["append"], net.client(), MemCache())
+    assert items == []
+    assert other not in net.calls
+
+
+def test_changelog_version_from_link_text() -> None:
+    index = '<html><body><a href="notes/two.html">What\'s new in 2.0.0</a></body></html>'
+    page = "<html><body>DataFrame.append was removed, use concat.</body></html>"
+    net = PagesNet(index, {PANDAS_BASE + "notes/two.html": page})
+    items = changelog_evidence("pandas", "2.5.0", ["append"], net.client(), MemCache())
+    assert [i.url for i in items] == [PANDAS_BASE + "notes/two.html"]
+
+
+def test_snippets_use_every_mention_of_a_name() -> None:
+    text = "to_json can append lines to a file. " + "x" * 2000 + " append was removed, use concat."
+    found = _snippets(text, ["append"], 5)
+    assert len(found) == 2
+    assert "to_json" in found[0]
+    assert "concat" in found[1]
+
+
+def pandas_net() -> PagesNet:
+    read = lambda name: (EVIDENCE_DIR / name).read_text(encoding="utf8")  # noqa: E731
+    return PagesNet(
+        read("pandas_whatsnew_index.html"),
+        {
+            PANDAS_BASE + "v3.1.0.html": read("pandas_whatsnew_v3.1.0.html"),
+            PANDAS_BASE + "v2.0.0.html": read("pandas_whatsnew_v2.0.0.html"),
+        },
+    )
+
+
+def test_changelog_qualified_name_beats_noisy_newer_page() -> None:
+    net = pandas_net()
+    names = ["DataFrame.append", "append"]
+    items = changelog_evidence("pandas", "3.1.1", names, net.client(), MemCache())
+    assert items
+    assert {i.url for i in items} == {PANDAS_BASE + "v2.0.0.html"}
+    assert any("concat" in i.content for i in items)
+
+
+def test_changelog_bare_name_keeps_newest_page_first() -> None:
+    net = pandas_net()
+    items = changelog_evidence("pandas", "3.1.1", ["append"], net.client(), MemCache())
+    assert {i.url for i in items} == {PANDAS_BASE + "v3.1.0.html"}
+
+
+def test_gather_passes_qualified_names_first(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[list[str]] = []
+
+    def fake_changelog(package, installed, names, client, cache):  # noqa: ANN001, ANN202
+        seen.append(list(names))
+        return []
+
+    monkeypatch.setattr("app.repair.evidence.changelog_evidence", fake_changelog)
+    sb = FakeSandbox()
+    sb.probe = lambda probe_id, target, name: ProbeResult(  # type: ignore[method-assign]
+        id=probe_id, status="ok", target_found=True, exists=False, package="widget", version="2.1.0"
+    )
+    code = "import pandas as pd\ndf = pd.DataFrame()\ndf.append(1)\n"
+    result = failing_result()
+    result.error = err("AttributeError", "'DataFrame' object has no attribute 'append'", 3)
+    monkeypatch.setattr(
+        "app.repair.evidence.plan_probes", lambda *a, **k: [("pandas.DataFrame", "append")]
+    )
+    gather(code, result, sb.probe, {"widget": "2.1.0"}, 1, settings(), Net().client(), MemCache())
+    assert seen == [["DataFrame.append", "append"]]
+
+
+def test_gather_qualifies_name_from_error_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[list[str]] = []
+
+    def fake_changelog(package, installed, names, client, cache):  # noqa: ANN001, ANN202
+        seen.append(list(names))
+        return []
+
+    monkeypatch.setattr("app.repair.evidence.changelog_evidence", fake_changelog)
+    code = "import pandas as pd\na = pd.DataFrame()\nb = pd.DataFrame()\nres = a.append(b)\n"
+    result = failing_result()
+    result.error = err("AttributeError", "'DataFrame' object has no attribute 'append'", 4)
+    gather(
+        code,
+        result,
+        FakeSandbox().probe,
+        {"widget": "2.1.0"},
+        1,
+        settings(),
+        Net().client(),
+        MemCache(),
+    )
+    assert seen == [["DataFrame.append", "append"]]

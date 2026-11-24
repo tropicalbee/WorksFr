@@ -17,6 +17,10 @@ class SandboxError(Exception):
     """The container could not be started, prepared or reached."""
 
 
+class SandboxTimeLimit(SandboxError):
+    """The whole-check time limit ran out while the sandbox was working."""
+
+
 class Sandbox(Protocol):
     def start(self, packages: list[str]) -> Environment:
         """Start the container, install `packages`, cut the network, start the runner.

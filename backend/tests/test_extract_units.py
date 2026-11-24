@@ -135,6 +135,17 @@ def test_http_errors_become_extraction_errors() -> None:
         extract_url("https://example.com/post", client)
 
 
+@pytest.mark.parametrize("status", [401, 403, 429])
+def test_blocked_sites_get_a_plain_message(status: int) -> None:
+    transport = httpx.MockTransport(lambda request: httpx.Response(status))
+    with _client(transport) as client, pytest.raises(ExtractionError) as info:
+        extract_url("https://example.com/post", client)
+    assert str(info.value) == (
+        "example.com blocks automated reading, so WorksFr can't check this page. "
+        "Paste the code or upload the notebook instead."
+    )
+
+
 def test_missing_readme_candidates_raise() -> None:
     transport = httpx.MockTransport(lambda request: httpx.Response(404))
     with _client(transport) as client, pytest.raises(ExtractionError):

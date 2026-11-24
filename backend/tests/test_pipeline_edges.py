@@ -20,6 +20,89 @@ def notebook_cells(codes: list[str]) -> bytes:
 
 
 @pytest.mark.parametrize(
+    "module,install,label",
+    [
+        ("sk", "", Label.CANT_VERIFY),
+        ("sklearn", "", Label.BROKEN),
+        ("sk", "!pip install SK==1\n", Label.BROKEN),
+    ],
+)
+def test_guessed_import_origin_reaches_label_and_skips_repairs(
+    module: str, install: str, label: Label
+) -> None:
+    from app.models import ProbeResult
+
+    class ImportSandbox:
+        def start(self, packages: list[str]) -> Environment:
+            return Environment(versions={package: "1" for package in packages})
+
+        def exec(self, step_id: str, code: str) -> ExecResult:
+            return ExecResult(
+                id=step_id,
+                status="error",
+                error=ErrorInfo(
+                    type="ImportError", message=f"cannot import name 'my_sk' from '{module}'"
+                ),
+            )
+
+        def probe(self, probe_id: str, target: str, name: str) -> ProbeResult:
+            return ProbeResult(id=probe_id, status="ok", target_found=False)
+
+        def close(self) -> None:
+            pass
+
+    class UnavailableProposer:
+        calls = 0
+
+        def propose(self, messages: list[dict[str, str]]) -> None:
+            self.calls += 1
+            raise LLMUnavailableError(["test provider unavailable"])
+
+    settings = Settings(_env_file=None, providers=[])
+    proposer, sink = UnavailableProposer(), Sink()
+    with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(404))) as http:
+        run_check(
+            "guessed",
+            ("guessed.ipynb", notebook_cells([f"{install}from {module} import my_sk"])),
+            PipelineDeps(settings, lambda _: ImportSandbox(), proposer, http, Cache()),
+            sink,
+        )
+    final = next(event.step for event in sink.events if event.type == "step_final")
+    assert final.label == label
+    assert proposer.calls == (0 if label == Label.CANT_VERIFY else 1)
+    assert sink.events[-1].type == "done"
+
+
+def test_cant_verify_dependency_is_not_sent_to_repair() -> None:
+    class NeverPropose:
+        def propose(self, messages: list[dict[str, str]]) -> None:
+            pytest.fail("Unverifiable source and its dependent must not go to repair")
+
+    settings = Settings(_env_file=None, providers=[])
+    sink = Sink()
+    with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(404))) as http:
+        run_check(
+            "unverifiable-cascade",
+            (
+                "dependency.ipynb",
+                notebook_cells(["data = open('missing-fixture-data.bin').read()", "print(data)"]),
+            ),
+            PipelineDeps(
+                settings,
+                lambda _: LocalRunnerSandbox(settings, runner_path=ROOT / "sandbox/runner.py"),
+                NeverPropose(),
+                http,
+                Cache(),
+            ),
+            sink,
+        )
+    finals = [event.step for event in sink.events if event.type == "step_final"]
+    assert [step.label for step in finals] == [Label.CANT_VERIFY, Label.CANT_VERIFY]
+    assert finals[1].reason == "depends on step 1, which couldn't be verified"
+    assert sink.events[-1].type == "done"
+
+
+@pytest.mark.parametrize(
     ("body", "message"),
     [
         ("", "This page has no code blocks to check."),
@@ -221,3 +304,89 @@ def test_internal_exception_is_logged_not_exposed(caplog: pytest.LogCaptureFixtu
     assert "detail for log" in caplog.text
     assert "private-test-key" not in caplog.text
     assert "RuntimeError" in caplog.text
+
+
+class FakeSandbox:
+    """Mocked sandbox: steps containing 'bad' fail; restart can be made to run out of time."""
+
+    def __init__(self, clock: list[float] | None = None, *, restart_error: Exception | None = None):
+        self.clock, self.restart_error = clock, restart_error
+        self.exec_count = 0
+
+    def start(self, packages: list[str]) -> Environment:
+        return Environment(versions={})
+
+    def exec(self, step_id: str, code: str) -> ExecResult:
+        self.exec_count += 1
+        if self.clock is not None and self.exec_count == 1:
+            self.clock[0] += 850
+        if "bad" in code:
+            return ExecResult(
+                id=step_id, status="error", error=ErrorInfo(type="ValueError", message="bad value")
+            )
+        return ExecResult(id=step_id, status="ok")
+
+    def probe(self, probe_id: str, target: str, name: str):
+        from app.models import ProbeResult
+
+        return ProbeResult(id=probe_id, status="ok", target_found=False)
+
+    def restart(self, replay: list[str]) -> None:
+        if self.restart_error is not None:
+            raise self.restart_error
+
+    def close(self) -> None:
+        pass
+
+
+def test_no_repair_when_little_time_is_left() -> None:
+    clock = [0.0]
+
+    class CountingProposer:
+        calls = 0
+
+        def propose(self, messages: list[dict[str, str]]) -> None:
+            self.calls += 1
+            raise AssertionError("no repair should be tried")
+
+    settings = Settings(_env_file=None, providers=[])
+    proposer, sink = CountingProposer(), Sink()
+    with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(404))) as http:
+        deps = PipelineDeps(
+            settings, lambda _: FakeSandbox(clock), proposer, http, Cache(), clock=lambda: clock[0]
+        )
+        run_check(
+            "late",
+            ("late.ipynb", notebook_cells(["int('bad')", "x = 1", "int('bad2')"])),
+            deps,
+            sink,
+        )
+    finals = [event.step for event in sink.events if event.type == "step_final"]
+    assert proposer.calls == 0
+    assert [step.label for step in finals] == [Label.BROKEN, Label.WORKS, Label.BROKEN]
+    note = "No repair was tried: the check was running out of time."
+    assert note in finals[0].reason and note in finals[2].reason
+    assert note not in finals[1].reason
+    assert sink.events[-1].type == "done"
+
+
+def test_time_limit_during_restart_keeps_finished_steps() -> None:
+    from app.sandbox.interface import SandboxTimeLimit
+
+    settings = Settings(_env_file=None, providers=[])
+    sink = Sink()
+    sandbox = FakeSandbox(restart_error=SandboxTimeLimit("Whole-check timeout exceeded"))
+    with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(404))) as http:
+        deps = PipelineDeps(settings, lambda _: sandbox, Proposer(), http, Cache())
+        run_check(
+            "limit",
+            ("limit.ipynb", notebook_cells(["x = 1", "y = 2", "int('bad')"])),
+            deps,
+            sink,
+        )
+    types = [event.type for event in sink.events]
+    assert types.count("step_final") == 2
+    assert types[-1] == "failed"
+    assert sink.events[-1].error == (
+        "This check reached its 15-minute limit at step 3. The steps before it are shown."
+    )

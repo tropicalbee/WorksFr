@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -5,6 +6,7 @@ from test_extract import FIXTURES, NAMES, _client
 
 from app.extract import extract_url
 from app.extract.libs import packages_from_pip_line, pins_from_pip_line
+from app.extract.video import parse_reply
 from app.main import create_app
 from app.models import CheckReport, CheckStatus, SourceKind, StepKind, StepReport
 from app.pins import find_install_pins
@@ -128,3 +130,101 @@ def test_pipeline_emits_install_pins() -> None:
     pin = environment.install_pins[0]
     assert (pin.step_idx, pin.package, pin.pinned) == (0, "nbformat", "==1.0")
     assert pin.used == environment.versions["nbformat"]
+
+
+def test_saved_video_output_pins_only_tutorial_packages() -> None:
+    reply = parse_reply(json.loads((FIXTURES / "video" / "CbpsDMwFG2g_300-600.json").read_text()))
+    pins = find_install_pins(
+        [],
+        {"openai": "2.0"},
+        output_blocks=(
+            (idx, block.code) for idx, block in enumerate(reply.blocks) if block.kind == "output"
+        ),
+        packages=["openai", "pandas", "numpy", "python-dotenv"],
+    )
+    openai = next(pin for pin in pins if pin.package == "openai")
+    assert (openai.pinned, openai.origin, openai.used, openai.step_idx) == (
+        "==0.27.8",
+        "pip_output",
+        "2.0",
+        3,
+    )
+    assert openai.line.startswith("Requirement already satisfied: openai in ")
+    assert not {"yarl", "frozenlist"}.intersection(pin.package for pin in pins)
+
+
+def test_successful_install_output_normalizes_dashed_names_and_versions() -> None:
+    line = "  Successfully installed scikit-learn-1.2.2 Flask_Login-0.6.3  "
+    pins = find_install_pins(
+        [],
+        {"Scikit_Learn": "1.7.0"},
+        output_blocks=[(4, line)],
+        packages=["Scikit_Learn", "flask-login"],
+    )
+    assert [(p.package, p.pinned, p.used, p.origin) for p in pins] == [
+        ("scikit-learn", "==1.2.2", "1.7.0", "pip_output"),
+        ("flask-login", "==0.6.3", None, "pip_output"),
+    ]
+    assert all(pin.step_idx == 4 and pin.line == line.strip() for pin in pins)
+
+
+def test_output_pins_use_first_version_and_keep_install_line_constraints() -> None:
+    pins = find_install_pins(
+        [(5, "pip install numpy pandas<2")],
+        {},
+        output_blocks=[
+            (3, "Successfully installed pandas-1.5.3 numpy-1.24.0"),
+            (2, "Requirement already satisfied: pandas in /site-packages (1.4.0)"),
+        ],
+    )
+    assert [(p.package, p.pinned, p.origin, p.step_idx) for p in pins] == [
+        ("pandas", "<2", "install_line", 5),
+        ("pandas", "==1.4.0", "pip_output", 2),
+        ("numpy", "==1.24.0", "pip_output", 3),
+    ]
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "Collecting pandas==1.5.3",
+        "Requirement already satisfied: pandas==1.5.3",
+        "Requirement already satisfied pandas in /site-packages (1.5.3)",
+        "Requirement already satisfied: pandas in /site-packages (line 1)",
+        "Requirement already satisfied: pandas- in /site-packages (1.5.3)",
+        "Requirement already satisfied: pandas in /site-packages (1.5.3) trailing text",
+        "The log says Successfully installed pandas-1.5.3",
+        "Successfully installed pandas-1.5.3 is an example",
+        "Successfully installed pandas-not-a-version",
+        "Successfully installed",
+    ],
+)
+def test_near_matches_are_not_pip_output_pins(line: str) -> None:
+    assert find_install_pins([], {}, output_blocks=[(0, line)], packages=["pandas"]) == []
+
+
+def test_pip_output_requires_explicit_output_blocks_and_known_names() -> None:
+    output = "Successfully installed pandas-1.5.3"
+    assert find_install_pins([(0, output)], {}, packages=["pandas"]) == []
+    assert find_install_pins([], {}, output_blocks=[(0, output)]) == []
+
+
+def test_requirement_version_is_last_parenthesized_group() -> None:
+    line = (
+        "Requirement already satisfied: openai in C:\\site-packages "
+        "(from -r requirements.txt (line 1)) (0.27.8)"
+    )
+    pins = find_install_pins([], {}, output_blocks=[(1, line)], packages=["openai"])
+    assert len(pins) == 1
+    assert pins[0].pinned == "==0.27.8"
+
+
+def test_install_line_origin_defaults_and_openapi_documents_output_origin() -> None:
+    from app.config import Settings
+
+    pin = find_install_pins([(0, "pip install pandas==1.0")], {})[0]
+    assert pin.origin == "install_line"
+    schemas = create_app(Settings(_env_file=None, providers=[])).openapi()["components"]["schemas"]
+    origin = schemas["InstallPin"]["properties"]["origin"]
+    assert origin["default"] == "install_line"
+    assert origin["enum"] == ["install_line", "pip_output"]

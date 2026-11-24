@@ -10,7 +10,7 @@ type CheckLoadState =
 
 const eventTypes = [
   'extracted', 'environment', 'step_started', 'step_result',
-  'repair_attempt', 'step_final', 'done', 'failed',
+  'repair_attempt', 'step_final', 'done', 'failed', 'rate_limit_wait',
 ] as const satisfies readonly CheckEvent['type'][]
 
 export function useLiveCheck(id: string): CheckLoadState {
@@ -54,7 +54,7 @@ export function useLiveCheck(id: string): CheckLoadState {
               }
               const event = JSON.parse(message.data) as CheckEvent
               if (!event || event.type !== type) throw new Error('Invalid event type')
-              const next = applyEvent(current, seq, event)
+              const next = applyEvent(current, seq, event, Date.now())
               if (next === current) return
               current = next
               publish({ status: 'ready', check: current })

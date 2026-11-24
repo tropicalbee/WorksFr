@@ -263,3 +263,19 @@ def test_precheck_negative(code):
 )
 def test_precheck_unparseable_returns_none(code):
     assert precheck(code) is None
+
+
+@pytest.mark.parametrize(
+    "label,reason",
+    [
+        (Label.BROKEN, "depends on step 3, which is still broken"),
+        (Label.CANT_VERIFY, "depends on step 3, which couldn't be verified"),
+    ],
+)
+def test_cascade_keeps_source_label(label: Label, reason: str) -> None:
+    from app.labels import cascade_decision, is_cascade
+
+    decision = cascade_decision(2, label)
+    assert decision.label == label
+    assert decision.reason == reason
+    assert is_cascade(decision)

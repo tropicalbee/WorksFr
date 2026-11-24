@@ -301,3 +301,14 @@ def test_start_failure_cleans_up(
         sandbox.start([])
     assert commands.calls[-1][1:3] == ["rm", "-f"]
     sandbox.close()
+
+
+def test_expired_deadline_raises_time_limit_not_install_failure() -> None:
+    import time
+
+    from app.sandbox.interface import SandboxTimeLimit
+
+    sandbox = DockerSandbox(Settings(_env_file=None), "c1", Commands())
+    sandbox._deadline = time.monotonic() - 1
+    with pytest.raises(SandboxTimeLimit):
+        sandbox.start(["pandas"])

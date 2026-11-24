@@ -1,0 +1,11 @@
+/* Prose column for the Terms, Privacy and Security pages. */
+.legal { max-width: 68ch; padding: 56px 0 8px; color: var(--text-2); font-size: 15px; line-height: 1.65; }
+.legal h1 { margin: 0 0 8px; color: var(--text); font-size: 32px; font-weight: 590; line-height: 1.2; }
+.legal h2 { margin: 36px 0 10px; color: var(--text); font-size: 18px; font-weight: 590; line-height: 1.35; }
+.legal p { margin: 0 0 14px; }
+.legal ul { margin: 0 0 14px; padding-left: 20px; }
+.legal li { margin-bottom: 6px; }
+.legal a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.legal code { font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.92em; color: var(--text); }
+.legal-updated { margin: 0 0 28px; color: var(--text-3); font-size: 13px; }
+@media (max-width: 900px) { .legal { padding-top: 36px; } .legal h1 { font-size: 26px; } }

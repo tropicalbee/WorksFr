@@ -13,7 +13,9 @@ from pydantic import BaseModel
 
 from app import storage
 from app.events import StoredEvent
-from app.extract import ExtractionError, check_url
+from app.extract import ExtractionError, PastedCode, check_url
+from app.extract.paste import PASTE_SOURCE
+from app.extract.routing import route_url
 from app.models import CheckReport, CheckStatus, SourceKind
 from app.pipeline import run_check
 from app.recorder import RecorderSink
@@ -23,6 +25,14 @@ router = APIRouter(prefix="/api")
 
 class URLSubmission(BaseModel):
     url: str
+
+
+MAX_PASTE_CHARS = 200_000
+
+
+class CodeSubmission(BaseModel):
+    code: str
+    title: str | None = None
 
 
 class CheckCreated(BaseModel):
@@ -36,15 +46,25 @@ def _report(request: Request, check_id: str) -> CheckReport:
     return report
 
 
-def _submit(request: Request, source: str | tuple[str, bytes]) -> CheckCreated:
+def _submit(request: Request, source: str | tuple[str, bytes] | PastedCode) -> CheckCreated:
+    if isinstance(source, str):
+        route = route_url(source)
+        if route.kind == "video":
+            source = route.fetch_urls[0]
+    if isinstance(source, PastedCode):
+        source_kind, shown = SourceKind.PASTE, PASTE_SOURCE
+    elif isinstance(source, str):
+        source_kind, shown = SourceKind.URL, source
+    else:
+        source_kind, shown = SourceKind.NOTEBOOK, source[0]
     check_id = uuid4().hex
     state = request.app.state
     storage.create_check(
         state.settings.database_path,
         CheckReport(
             id=check_id,
-            source_kind=SourceKind.URL if isinstance(source, str) else SourceKind.NOTEBOOK,
-            source=source if isinstance(source, str) else source[0],
+            source_kind=source_kind,
+            source=shown,
             status=CheckStatus.RUNNING,
         ),
     )
@@ -66,6 +86,15 @@ def submit_url(body: URLSubmission, request: Request) -> CheckCreated:
     except ExtractionError as exc:
         raise HTTPException(422, str(exc)) from None
     return _submit(request, body.url)
+
+
+@router.post("/checks/code", response_model=CheckCreated)
+def submit_code(body: CodeSubmission, request: Request) -> CheckCreated:
+    if not body.code.strip():
+        raise HTTPException(422, "Paste some code to check")
+    if len(body.code) > MAX_PASTE_CHARS:
+        raise HTTPException(422, "The pasted text is over the 200,000 character limit")
+    return _submit(request, PastedCode(body.code, body.title))
 
 
 @router.post("/checks/notebook", response_model=CheckCreated)

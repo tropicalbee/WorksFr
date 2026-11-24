@@ -2,6 +2,7 @@
 
 import re
 import sys
+from collections.abc import Collection, Iterable
 
 # Import name -> PyPI name, for packages whose import name differs from the install name.
 # Dotted keys match a module path prefix. Extend this dict when a tutorial needs more.
@@ -85,6 +86,24 @@ def dist_for_import(import_name: str) -> str:
         if mapped:
             return normalize(mapped)
     return normalize(parts[0])
+
+
+def guessed_distributions(
+    import_names: Iterable[str], explicit_installs: Collection[str] = ()
+) -> set[str]:
+    """Distributions inferred only from an unmapped import, without an install line."""
+    guessed: set[str] = set()
+    known = {normalize(name) for name in explicit_installs}
+    for module in import_names:
+        if is_stdlib(module):
+            continue
+        parts = module.split(".")
+        distribution = dist_for_import(module)
+        if any(".".join(parts[:end]) in IMPORT_TO_PYPI for end in range(1, len(parts) + 1)):
+            known.add(distribution)
+        else:
+            guessed.add(distribution)
+    return guessed - known
 
 
 def imports_for_dist(dist_name: str) -> set[str]:

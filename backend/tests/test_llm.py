@@ -1,6 +1,10 @@
 import json
 import logging
+import threading
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
+from email.utils import format_datetime
 
 import httpx
 import pytest
@@ -51,7 +55,7 @@ VALID = '{"patched_code":"x = 1","explanation":"fixed","apis_changed":[]}'
 MESSAGES = [{"role": "user", "content": "Repair this step"}]
 
 
-@pytest.mark.parametrize("status", [429, 500, 401, 404, 400, 403, 422])
+@pytest.mark.parametrize("status", [500, 401, 404, 400, 403, 422])
 def test_fallback_on_api_errors(settings: Settings, status: int) -> None:
     calls = []
 
@@ -189,7 +193,7 @@ def test_provider_defined_only_in_environment(monkeypatch: pytest.MonkeyPatch) -
 
 def test_returned_provider_is_not_mutable_client_state(settings: Settings) -> None:
     responses: Iterator[httpx.Response] = iter(
-        [completion(VALID), *(httpx.Response(429, json={"error": "limited"}) for _ in range(3))]
+        [completion(VALID), *(httpx.Response(500, json={"error": "unavailable"}) for _ in range(3))]
     )
     with httpx.Client(transport=httpx.MockTransport(lambda _: next(responses))) as http:
         client = LLMClient(settings, http)
@@ -197,3 +201,177 @@ def test_returned_provider_is_not_mutable_client_state(settings: Settings) -> No
         assert not hasattr(client, "last_provider")
         with pytest.raises(LLMUnavailableError):
             client.complete_json(MESSAGES, RepairProposal)
+
+
+class Clock:
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.sleeps: list[float] = []
+        self.lock = threading.Lock()
+
+    def monotonic(self) -> float:
+        with self.lock:
+            return self.now
+
+    def sleep(self, seconds: float) -> None:
+        with self.lock:
+            self.sleeps.append(seconds)
+            self.now += seconds
+
+
+def test_minimum_provider_interval_and_per_call_notice(settings: Settings) -> None:
+    settings.providers[0].min_interval_seconds = 3
+    clock = Clock()
+    notices = []
+    sent = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        sent.append(clock.monotonic())
+        return completion(VALID)
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as http:
+        client = LLMClient(settings, http, sleep=clock.sleep, monotonic=clock.monotonic)
+        client.complete_json(MESSAGES, RepairProposal)
+        client.complete_json(MESSAGES, RepairProposal, on_wait=lambda *args: notices.append(args))
+    assert sent == [0, 3]
+    assert clock.sleeps == [3]
+    assert notices == [("first", 3)]
+
+
+@pytest.mark.parametrize("header,wait", [("3", 3), (None, 5), ("bad", 5)])
+def test_rate_limit_retries_same_provider_once(
+    settings: Settings, header: str | None, wait: float
+) -> None:
+    calls = []
+    clock = Clock()
+    notices = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.host)
+        if len(calls) == 1:
+            return httpx.Response(
+                429, headers={"Retry-After": header} if header else {}, json={"error": "limited"}
+            )
+        return completion(VALID)
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as http:
+        client = LLMClient(settings, http, sleep=clock.sleep, monotonic=clock.monotonic)
+        result = client.complete_json(
+            MESSAGES, RepairProposal, on_wait=lambda *args: notices.append(args)
+        )
+    assert result.provider == "first"
+    assert calls == ["first.test", "first.test"]
+    assert clock.sleeps == [wait]
+    assert notices == [("first", wait)]
+
+
+@pytest.mark.parametrize("header,expected_sleeps", [("60", []), ("3", [3])])
+def test_excessive_or_repeated_rate_limit_falls_back(
+    settings: Settings, header: str, expected_sleeps: list[float]
+) -> None:
+    clock = Clock()
+    calls = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.host)
+        if request.url.host == "first.test":
+            return httpx.Response(429, headers={"Retry-After": header}, json={"error": "limited"})
+        return completion(VALID)
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as http:
+        client = LLMClient(settings, http, sleep=clock.sleep, monotonic=clock.monotonic)
+        assert client.complete_json(MESSAGES, RepairProposal).provider == "second"
+    assert calls == ["first.test"] * (2 if expected_sleeps else 1) + ["second.test"]
+    assert clock.sleeps == expected_sleeps
+
+
+def test_rate_limit_budget_is_separate_from_json_retry(settings: Settings) -> None:
+    clock = Clock()
+    calls = []
+    replies = iter(
+        [
+            httpx.Response(429, headers={"Retry-After": "3"}, json={"error": "limited"}),
+            completion("bad"),
+            httpx.Response(429, headers={"Retry-After": "3"}, json={"error": "limited"}),
+            completion(VALID),
+        ]
+    )
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.host)
+        return next(replies)
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as http:
+        client = LLMClient(settings, http, sleep=clock.sleep, monotonic=clock.monotonic)
+        assert client.complete_json(MESSAGES, RepairProposal).provider == "second"
+    assert calls == ["first.test"] * 3 + ["second.test"]
+    assert clock.sleeps == [3]
+
+
+def test_rate_limit_does_not_consume_json_validation_attempt(settings: Settings) -> None:
+    clock = Clock()
+    replies = iter(
+        [
+            httpx.Response(429, headers={"Retry-After": "1"}, json={"error": "limited"}),
+            completion("bad"),
+            completion(VALID),
+        ]
+    )
+    notices = []
+    with httpx.Client(transport=httpx.MockTransport(lambda _: next(replies))) as http:
+        client = LLMClient(settings, http, sleep=clock.sleep, monotonic=clock.monotonic)
+        result = client.complete_json(
+            MESSAGES, RepairProposal, on_wait=lambda *args: notices.append(args)
+        )
+    assert result.provider == "first"
+    assert clock.sleeps == [1]
+    assert notices == []
+
+
+def test_http_date_retry_after(settings: Settings, monkeypatch: pytest.MonkeyPatch) -> None:
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    monkeypatch.setattr("app.llm.client.time.time", lambda: now.timestamp())
+    clock = Clock()
+    replies = iter(
+        [
+            httpx.Response(
+                429,
+                headers={"Retry-After": format_datetime(now + timedelta(seconds=4), usegmt=True)},
+                json={"error": "limited"},
+            ),
+            completion(VALID),
+        ]
+    )
+    with httpx.Client(transport=httpx.MockTransport(lambda _: next(replies))) as http:
+        client = LLMClient(settings, http, sleep=clock.sleep, monotonic=clock.monotonic)
+        assert client.complete_json(MESSAGES, RepairProposal).provider == "first"
+    assert clock.sleeps == [4]
+
+
+def test_two_threads_share_provider_pacing(settings: Settings) -> None:
+    settings.providers[0].min_interval_seconds = 3
+    clock = Clock()
+    sent = []
+    first_entered = threading.Event()
+    second_sent = threading.Event()
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        with clock.lock:
+            sent.append(clock.now)
+            index = len(sent)
+        if index == 1:
+            first_entered.set()
+            assert second_sent.wait(timeout=5), "pacing lock must not cover the HTTP request"
+        else:
+            second_sent.set()
+        return completion(VALID)
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as http:
+        client = LLMClient(settings, http, sleep=clock.sleep, monotonic=clock.monotonic)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first = pool.submit(client.complete_json, MESSAGES, RepairProposal)
+            assert first_entered.wait(timeout=5)
+            second = pool.submit(client.complete_json, MESSAGES, RepairProposal)
+            assert first.result(timeout=5).provider == "first"
+            assert second.result(timeout=5).provider == "first"
+    assert sent == [0, 3]

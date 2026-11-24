@@ -1,7 +1,11 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
+import { BrowserRouter, Route, Routes } from 'react-router'
 
+const HomePage = lazy(() => import('./pages/HomePage'))
 const CheckPage = lazy(() => import('./pages/CheckPage'))
+const TermsPage = lazy(() => import('./pages/TermsPage'))
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage'))
+const SecurityPage = lazy(() => import('./pages/SecurityPage'))
 const ReportPreview = import.meta.env.DEV ? lazy(() => import('./preview/ReportPreview')) : null
 
 export default function App() {
@@ -9,13 +13,12 @@ export default function App() {
     <BrowserRouter>
       <Suspense fallback={<p className="loading">Loading report…</p>}>
         <Routes>
+          <Route path="/" element={<HomePage />} />
           <Route path="/checks/:id" element={<CheckPage />} />
-          {ReportPreview && (
-            <>
-              <Route path="/" element={<Navigate to="/preview/report" replace />} />
-              <Route path="/preview/report" element={<ReportPreview />} />
-            </>
-          )}
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/security" element={<SecurityPage />} />
+          {ReportPreview && <Route path="/preview/report" element={<ReportPreview />} />}
           <Route
             path="*"
             element={

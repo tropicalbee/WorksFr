@@ -13,6 +13,7 @@ from app.models import (
     CheckStatus,
     DateSource,
     ErrorInfo,
+    InstallPin,
     RepairAttempt,
     Score,
     StepReport,
@@ -52,6 +53,9 @@ CREATE TABLE IF NOT EXISTS steps (
     output TEXT NOT NULL,
     error_json TEXT,
     warnings_json TEXT NOT NULL,
+    video_timestamp INTEGER,
+    low_confidence INTEGER NOT NULL DEFAULT 0,
+    read_agreement INTEGER,
     UNIQUE(check_id, idx)
 );
 CREATE TABLE IF NOT EXISTS doc_cache (
@@ -75,6 +79,7 @@ VERSIONS = TypeAdapter(dict[str, str])
 WARNINGS = TypeAdapter(list[WarningInfo])
 ATTEMPTS = TypeAdapter(list[RepairAttempt])
 STRINGS = TypeAdapter(list[str])
+PINS = TypeAdapter(list[InstallPin])
 
 
 def _now() -> str:
@@ -100,6 +105,14 @@ def init_db(path: str) -> None:
         if version not in (0, 1):
             raise RuntimeError("Unsupported schema version; remove the old database file manually")
         connection.executescript(SCHEMA)
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(steps)")}
+        for name, definition in (
+            ("video_timestamp", "INTEGER"),
+            ("low_confidence", "INTEGER NOT NULL DEFAULT 0"),
+            ("read_agreement", "INTEGER"),
+        ):
+            if name not in columns:
+                connection.execute(f"ALTER TABLE steps ADD COLUMN {name} {definition}")
         connection.execute("PRAGMA user_version=1")
 
 
@@ -108,15 +121,17 @@ def _save_step(connection: sqlite3.Connection, check_id: str, step: StepReport) 
         """INSERT INTO steps (
             check_id, idx, kind, original_code, final_code, label, reason,
             verdict, repair_attempts_json, apis_changed_json,
-            explanation, output, error_json, warnings_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            explanation, output, error_json, warnings_json, video_timestamp, low_confidence,
+            read_agreement
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(check_id, idx) DO UPDATE SET
             kind=excluded.kind, original_code=excluded.original_code,
             final_code=excluded.final_code, label=excluded.label, reason=excluded.reason,
             verdict=excluded.verdict, repair_attempts_json=excluded.repair_attempts_json,
             apis_changed_json=excluded.apis_changed_json, explanation=excluded.explanation,
             output=excluded.output, error_json=excluded.error_json,
-            warnings_json=excluded.warnings_json
+            warnings_json=excluded.warnings_json, video_timestamp=excluded.video_timestamp,
+            low_confidence=excluded.low_confidence, read_agreement=excluded.read_agreement
         """,
         (
             check_id,
@@ -133,6 +148,9 @@ def _save_step(connection: sqlite3.Connection, check_id: str, step: StepReport) 
             step.output,
             step.error.model_dump_json() if step.error is not None else None,
             WARNINGS.dump_json(step.warnings).decode(),
+            step.video_timestamp,
+            step.low_confidence,
+            step.read_agreement,
         ),
     )
 
@@ -230,10 +248,26 @@ def _step(row: sqlite3.Row) -> StepReport:
         output=row["output"],
         error=ErrorInfo.model_validate_json(row["error_json"]) if row["error_json"] else None,
         warnings=WARNINGS.validate_json(row["warnings_json"]),
+        video_timestamp=row["video_timestamp"],
+        low_confidence=row["low_confidence"],
+        read_agreement=row["read_agreement"],
     )
 
 
-def _report(row: sqlite3.Row, steps: list[StepReport]) -> CheckReport:
+def _stored_pins(connection: sqlite3.Connection, check_id: str) -> list[InstallPin] | None:
+    """Pins from the last stored environment event, or None for checks that predate them."""
+    row = connection.execute(
+        "SELECT payload_json FROM events WHERE check_id=? AND type='environment' "
+        "ORDER BY seq DESC LIMIT 1",
+        (check_id,),
+    ).fetchone()
+    pins = json.loads(row["payload_json"]).get("install_pins") if row is not None else None
+    return PINS.validate_python(pins) if pins is not None else None
+
+
+def _report(
+    row: sqlite3.Row, steps: list[StepReport], pins: list[InstallPin] | None = None
+) -> CheckReport:
     return CheckReport(
         id=row["id"],
         source_kind=row["source_kind"],
@@ -242,12 +276,15 @@ def _report(row: sqlite3.Row, steps: list[StepReport]) -> CheckReport:
         published=row["published"],
         date_source=row["date_source"],
         status=row["status"],
+        created_at=row["created_at"],
         score=Score.model_validate(json.loads(row["score_json"])) if row["score_json"] else None,
         versions=VERSIONS.validate_json(row["versions_json"]),
         failed_packages=STRINGS.validate_json(row["failed_packages_json"]),
         error=row["error"],
         steps=steps,
-        install_pins=find_install_pins(
+        install_pins=pins
+        if pins is not None
+        else find_install_pins(
             ((step.idx, step.original_code) for step in steps),
             VERSIONS.validate_json(row["versions_json"]),
         ),
@@ -263,7 +300,7 @@ def get_report(db_path: str, check_id: str) -> CheckReport | None:
             "SELECT * FROM steps WHERE check_id=? ORDER BY idx",
             (check_id,),
         ).fetchall()
-        return _report(row, [_step(step) for step in steps])
+        return _report(row, [_step(step) for step in steps], _stored_pins(connection, check_id))
 
 
 def list_recent(db_path: str, limit: int = 20) -> list[CheckReport]:

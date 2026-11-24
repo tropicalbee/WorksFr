@@ -22,3 +22,36 @@ Each fixture is the raw bytes of a real page, saved with curl on 2026-11-23. Eac
 - `sklearn_boston`: blocks 2, 3, 7 and 9 (zero-based) have printed output pasted after the code in the same block. They are labelled `python`.
 - `openai_tds`: the code does `from sk import my_sk`, a local module that is not on PyPI, so `packages` lists only `openai`. Blocks 2 and 3 (zero-based) end with a `"""Output: ..."""` string inside the code.
 - `published` is set only where the page states it: GeeksforGeeks and DataScience+ via the page's JSON-LD or meta tags, Towards Data Science via its meta tags. The notebook and README give no date.
+
+## Video replies
+
+These are raw Gemini Interactions API replies for a YouTube tutorial, not video content. Each `<name>.json` is the reply as the API sent it. The matching `<name>.request.json` holds the exact request body without the key. All three were captured on 2026-11-24 with `python -m scripts.capture_video_reply`, in `backend/tests/fixtures/video/`.
+
+The video is Krish Naik, "OpenAI API With Python Tutorial 1-ChatCompletion API and Completion API" (2023). It uses openai 0.27.8.
+
+| File | Video URL | Clip window | Captured | Model | What it holds |
+| --- | --- | --- | --- | --- | --- |
+| CbpsDMwFG2g_0-300.json | https://www.youtube.com/watch?v=CbpsDMwFG2g | 0 to 300 s | 2026-11-24 | gemini-3.6-flash | Only shell setup: `conda create -p venv python=3.9 -y` at 153 s, `conda activate venv/` at 240 s, `pip install -r requirements.txt` at 265 s. |
+| CbpsDMwFG2g_300-600.json | https://www.youtube.com/watch?v=CbpsDMwFG2g | 300 to 600 s | 2026-11-24 | gemini-3.6-flash | The requirements.txt contents (`openai`, `pandas`, `numpy`, `python-dotenv`) labelled shell, pip output, a shell line that still carries the Windows prompt, and the `.env` line `OPENAI_API_KEY="sk"` labelled shell. The pip output shows openai 0.27.8. |
+| CbpsDMwFG2g_600-900.json | https://www.youtube.com/watch?v=CbpsDMwFG2g | 600 to 900 s | 2026-11-24 | gemini-3.6-flash | `pip install ipykernel` (703 s), `1+1` with output `2` (750 s), the openai and dotenv imports (759 s), and `pd.DataFrame(openai.Model.list()['data'])` (849 s), which breaks because `openai.Model` was removed in openai 1.0. |
+
+## YouTube description and comment metadata
+
+`youtube/CbpsDMwFG2g.videos.json` and `youtube/CbpsDMwFG2g.comments.json` are real replies for https://www.youtube.com/watch?v=CbpsDMwFG2g, captured on 2026-11-24 with `python -m scripts.capture_youtube_meta`. The description links one code source, `https://github.com/krishnaik06/OPENAI-API-Tutorials` (a repo whose README has no code), plus 11 YouTube links. Of the 49 comments, none are by the video's author. No test reads these files yet.
+
+The inline replies in
+`tests/test_youtube_capture.py` and the matching link-reader tests are marked
+`# hand-made, replace with capture` and follow the official `videos.list` and
+`commentThreads.list` shapes. They are synthetic test data, not captured replies.
+
+Claude can run `python -m scripts.capture_youtube_meta VIDEO_URL` from `backend/`
+with `YOUTUBE_API_KEY` configured. It saves the unmodified API response bytes as
+`youtube/<ID>.videos.json` and `youtube/<ID>.comments.json`, refuses to overwrite
+existing captures, and refuses any reply containing the configured key. A
+`commentsDisabled` error reply is preserved as the comments fixture.
+
+## Evidence pages (pandas release notes)
+
+`evidence/pandas_whatsnew_index.html` and `evidence/pandas_whatsnew_v2.0.0.html` are trimmed copies of https://pandas.pydata.org/docs/whatsnew/index.html and https://pandas.pydata.org/docs/whatsnew/v2.0.0.html, fetched on 2026-11-24. The index keeps only the toctree links to the 2.x and 3.x version pages. The v2.0.0 page keeps the title and three items of "Removal of prior version deprecations/changes", including the `DataFrame.append()` removal note that points to `concat()`.
+
+`evidence/pandas_whatsnew_v3.1.0.html` is a trimmed copy of https://pandas.pydata.org/docs/whatsnew/v3.1.0.html, fetched on 2026-11-24. It keeps the title and the `MultiIndex.union()` and two `HDFStore.append()` bug-fix lines, which mention `append` without `DataFrame.append`.

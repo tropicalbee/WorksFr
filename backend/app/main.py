@@ -34,6 +34,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             LLMProposer(llm),
             http,
             SqliteDocCache(settings.database_path),
+            proposer_factory=lambda on_wait: LLMProposer(llm, on_wait=on_wait),
         )
         try:
             yield

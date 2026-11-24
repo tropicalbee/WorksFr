@@ -74,6 +74,7 @@ GPU_MESSAGE_PATTERNS: tuple[str, ...] = (
 
 _QUOTED_PATH = re.compile(r": '(.*)'\s*$", re.DOTALL)
 _MODULE_NAME = re.compile(r"No module named ['\"]([^'\"]+)['\"]")
+_IMPORT_FROM = re.compile(r"cannot import name ['\"][^'\"]+['\"] from ['\"]([^'\"]+)['\"]")
 
 
 def _matches(message: str, patterns: tuple[str, ...]) -> bool:
@@ -102,6 +103,7 @@ def label_step(
     *,
     timed_out: bool = False,
     failed_packages: Collection[str] = (),
+    guessed_packages: Collection[str] = (),
 ) -> LabelDecision:
     """Label one step from its sandbox result. Rules apply in the ARCHITECTURE order."""
     if timed_out or result is None:
@@ -137,6 +139,9 @@ def label_step(
             label=Label.CANT_VERIFY,
             reason=f"{package} didn't install in the sandbox, so this step couldn't run.",
         )
+    if etype == "ImportError" and (match := _IMPORT_FROM.search(message)):
+        if dist_for_import(match.group(1)) in {normalize(name) for name in guessed_packages}:
+            return LabelDecision(label=Label.CANT_VERIFY, reason=REASON_LOCAL_MODULE)
     return LabelDecision(label=Label.BROKEN, reason=f"{etype}: {message}".strip(": "))
 
 
@@ -195,9 +200,18 @@ def precheck(code: str) -> LabelDecision | None:
 
 
 def judge_patch(
-    result: ExecResult | None, *, timed_out: bool = False, failed_packages: Collection[str] = ()
+    result: ExecResult | None,
+    *,
+    timed_out: bool = False,
+    failed_packages: Collection[str] = (),
+    guessed_packages: Collection[str] = (),
 ) -> tuple[LabelDecision, PatchVerdict]:
-    decision = label_step(result, timed_out=timed_out, failed_packages=failed_packages)
+    decision = label_step(
+        result,
+        timed_out=timed_out,
+        failed_packages=failed_packages,
+        guessed_packages=guessed_packages,
+    )
     if decision.label in (Label.WORKS, Label.DEPRECATED):
         return decision, PatchVerdict.FIXED
     environment_reasons = {
@@ -232,11 +246,16 @@ def cascade_source(error: ErrorInfo | None, unbound: Mapping[str, int]) -> int |
     return unbound.get(match.group(1)) if match else None
 
 
-def cascade_decision(source_idx: int) -> LabelDecision:
+def cascade_decision(source_idx: int, source_label: Label = Label.BROKEN) -> LabelDecision:
+    unverified = source_label == Label.CANT_VERIFY
     return LabelDecision(
-        label=Label.BROKEN, reason=f"{CASCADE_PREFIX}{source_idx + 1}, which is still broken"
+        label=Label.CANT_VERIFY if unverified else Label.BROKEN,
+        reason=f"{CASCADE_PREFIX}{source_idx + 1}, which "
+        + ("couldn't be verified" if unverified else "is still broken"),
     )
 
 
 def is_cascade(decision: LabelDecision) -> bool:
-    return decision.label == Label.BROKEN and decision.reason.startswith(CASCADE_PREFIX)
+    return decision.label in (Label.BROKEN, Label.CANT_VERIFY) and decision.reason.startswith(
+        CASCADE_PREFIX
+    )

@@ -3,9 +3,9 @@
 import re
 from dataclasses import dataclass
 from typing import Literal
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
-RouteKind = Literal["github_readme", "stackoverflow", "notebook", "html"]
+RouteKind = Literal["github_readme", "stackoverflow", "notebook", "html", "video"]
 
 _RAW_HOST = "https://raw.githubusercontent.com"
 _GITHUB_HOSTS = {"github.com", "www.github.com"}
@@ -23,7 +23,7 @@ _GITHUB_NON_REPO_OWNERS = {
 class Route:
     kind: RouteKind
     fetch_urls: tuple[str, ...] = ()
-    """URLs to try in order (README candidates, the raw notebook, or the page itself)."""
+    """URLs to try in order, or the normalized watch URL for the video reader."""
     question_id: int | None = None
     answer_id: int | None = None
 
@@ -81,6 +81,29 @@ def route_url(url: str) -> Route:
     host = (parts.hostname or "").lower()
     path = unquote(parts.path)
     segments = [s for s in path.split("/") if s]
+
+    if (
+        host in {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be", "www.youtu.be"}
+        and parts.scheme in ("http", "https")
+        and parts.username is None
+        and parts.password is None
+    ):
+        try:
+            if parts.port is not None:
+                return Route("html", (url,))
+        except ValueError:
+            return Route("html", (url,))
+        identifier = None
+        if host in {"youtube.com", "www.youtube.com", "m.youtube.com"}:
+            if path.rstrip("/") == "/watch":
+                values = parse_qs(parts.query, keep_blank_values=True).get("v", [])
+                identifier = values[0] if len(values) == 1 else None
+            elif path.startswith("/shorts/"):
+                identifier = path.removeprefix("/shorts/").rstrip("/")
+        elif host in {"youtu.be", "www.youtu.be"}:
+            identifier = path.removeprefix("/").rstrip("/")
+        if identifier is not None and re.fullmatch(r"[A-Za-z0-9_-]{11}", identifier):
+            return Route("video", (f"https://www.youtube.com/watch?v={identifier}",))
 
     if host in _STACKOVERFLOW_HOSTS:
         route = _stackoverflow_route(path, parts.fragment)

@@ -14,7 +14,7 @@ from pydantic import ValidationError
 from app.config import Settings
 from app.models import Environment, ExecResult, ProbeResult
 from app.packages import normalize
-from app.sandbox.interface import SandboxError, StepTimeoutError
+from app.sandbox.interface import SandboxError, SandboxTimeLimit, StepTimeoutError
 
 MAX_REPLY_BYTES = 1024 * 1024
 PACKAGE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*", re.ASCII)
@@ -76,18 +76,23 @@ class DockerSandbox:
         self._initial_environment: Environment | None = None
         self._pinned_restart = False
 
+    def _deadline_passed(self) -> bool:
+        return self._deadline is not None and time.monotonic() >= self._deadline
+
     def _time_left(self, timeout: float) -> float:
         if self._deadline is None:
             return timeout
         remaining = self._deadline - time.monotonic()
         if remaining <= 0:
-            raise SandboxError("Whole-check timeout exceeded")
+            raise SandboxTimeLimit("Whole-check timeout exceeded")
         return min(timeout, remaining)
 
     def _run(self, args: list[str], timeout: float = 60) -> subprocess.CompletedProcess[str]:
         try:
             return self._commands.run(args, timeout=self._time_left(timeout))
         except (OSError, subprocess.SubprocessError) as exc:
+            if isinstance(exc, subprocess.TimeoutExpired) and self._deadline_passed():
+                raise SandboxTimeLimit("Whole-check timeout exceeded") from None
             raise SandboxError(f"Docker command failed: {type(exc).__name__}") from None
 
     def _require_success(self, result: subprocess.CompletedProcess[str], action: str) -> None:
@@ -109,6 +114,8 @@ class DockerSandbox:
                 timeout=self._time_left(300),
             )
         except subprocess.TimeoutExpired:
+            if self._deadline_passed():
+                raise SandboxTimeLimit("Whole-check timeout exceeded") from None
             return False
         return result.returncode == 0
 
