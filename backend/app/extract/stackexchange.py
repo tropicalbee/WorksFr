@@ -16,7 +16,7 @@ from app.extract.blocks import build_blocks
 from app.extract.errors import ExtractionError
 from app.extract.fetch import fetch_url
 from app.extract.html_page import parse_html_blocks
-from app.extract.libs import detect_packages
+from app.extract.libs import library_fields
 from app.models import DateSource, Extraction, SourceFormat, SourceKind
 
 API_BASE = "https://api.stackexchange.com/2.3"
@@ -102,5 +102,5 @@ def extract_stackoverflow(
         published=published,
         date_source=DateSource.PAGE if published else DateSource.UNKNOWN,
         blocks=blocks,
-        packages=detect_packages(blocks),
+        **library_fields(blocks),
     )

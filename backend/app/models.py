@@ -14,9 +14,30 @@ from pydantic import BaseModel, Field, computed_field
 class StepKind(StrEnum):
     PYTHON = "python"
     REPL = "repl"
+    JAVASCRIPT = "javascript"
+    TYPESCRIPT = "typescript"
+    C = "c"
+    CPP = "cpp"
     SHELL = "shell"
     OUTPUT = "output"
     OTHER = "other"
+
+
+RUNNABLE_KINDS: frozenset[StepKind] = frozenset(
+    {
+        StepKind.PYTHON,
+        StepKind.REPL,
+        StepKind.JAVASCRIPT,
+        StepKind.TYPESCRIPT,
+        StepKind.C,
+        StepKind.CPP,
+    }
+)
+"""Kinds whose code goes to the sandbox. Shell, output and other never run."""
+
+
+def is_runnable(kind: StepKind) -> bool:
+    return kind in RUNNABLE_KINDS
 
 
 class Label(StrEnum):
@@ -98,6 +119,10 @@ class Extraction(BaseModel):
     blocks: list[Block]
     packages: list[str]
     """Sorted PyPI names, standard library excluded, version pins dropped."""
+    npm_packages: list[str] = Field(default_factory=list)
+    """Sorted npm names used by JavaScript and TypeScript blocks and npm install lines."""
+    c_system_headers: list[str] = Field(default_factory=list)
+    """Sorted `<header>` names in C and C++ blocks that are not in the standard library."""
     fetched_via: str | None = None
     """Name of the page reader that supplied the content, or None for a direct fetch."""
 
@@ -262,6 +287,7 @@ class InstallPin(BaseModel):
     package: str
     pinned: str
     used: str | None
+    ecosystem: Literal["pypi", "npm"] = "pypi"
     origin: Literal["install_line", "pip_output"] = "install_line"
     """Whether the version came from an install command or pip output."""
 

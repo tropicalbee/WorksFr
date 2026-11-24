@@ -12,7 +12,7 @@ from app.extract.blocks import build_blocks
 from app.extract.errors import ExtractionError
 from app.extract.fetch import check_url, fetch_url
 from app.extract.html_page import page_metadata, parse_html_blocks
-from app.extract.libs import IMPORT_TO_PYPI, detect_packages
+from app.extract.libs import IMPORT_TO_PYPI, detect_packages, library_fields
 from app.extract.markdown_doc import parse_markdown
 from app.extract.notebook import parse_notebook
 from app.extract.paste import PastedCode, extract_paste
@@ -89,7 +89,7 @@ def extract_url(url: str, client: httpx.Client, settings: Settings | None = None
             source=url,
             title=title,
             blocks=blocks,
-            packages=detect_packages(blocks),
+            **library_fields(blocks),
         )
 
     title, published = page_metadata(content, url)
@@ -106,7 +106,7 @@ def extract_url(url: str, client: httpx.Client, settings: Settings | None = None
                 published=published,
                 date_source=DateSource.PAGE if published else DateSource.UNKNOWN,
                 blocks=blocks,
-                packages=detect_packages(blocks),
+                **library_fields(blocks),
                 fetched_via=page.provider,
             )
     blocks = build_blocks(raws)
@@ -118,5 +118,5 @@ def extract_url(url: str, client: httpx.Client, settings: Settings | None = None
         published=published,
         date_source=DateSource.PAGE if published else DateSource.UNKNOWN,
         blocks=blocks,
-        packages=detect_packages(blocks),
+        **library_fields(blocks),
     )

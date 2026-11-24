@@ -4,10 +4,10 @@ import re
 
 import nbformat
 
-from app.extract.blocks import classify_notebook_cell
+from app.extract.blocks import LANGUAGE_KINDS, classify_notebook_cell
 from app.extract.errors import ExtractionError
-from app.extract.libs import detect_packages
-from app.models import Block, Extraction, SourceFormat, SourceKind
+from app.extract.libs import library_fields
+from app.models import Block, Extraction, SourceFormat, SourceKind, StepKind
 
 _HEADING = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$", re.M)
 _MAX_CONTEXT_CHARS = 1000
@@ -30,6 +30,19 @@ def _title(nb: nbformat.NotebookNode) -> str | None:
     return None
 
 
+def _kernel_kind(nb: nbformat.NotebookNode) -> StepKind:
+    """Language of the code cells: the kernelspec, else language_info. Unknown means Python."""
+    metadata = nb.get("metadata", {})
+    candidates = (
+        (metadata.get("kernelspec") or {}).get("language"),
+        (metadata.get("language_info") or {}).get("name"),
+    )
+    for name in candidates:
+        if isinstance(name, str) and name.strip().lower() in LANGUAGE_KINDS:
+            return LANGUAGE_KINDS[name.strip().lower()]
+    return StepKind.PYTHON
+
+
 def parse_notebook(source: str, data: bytes, *, source_kind: SourceKind) -> Extraction:
     """Code cells in order, empty ones dropped, with the Markdown cells before each as context."""
     try:
@@ -37,6 +50,7 @@ def parse_notebook(source: str, data: bytes, *, source_kind: SourceKind) -> Extr
     except (UnicodeDecodeError, ValueError, nbformat.reader.NotJSONError, KeyError) as exc:
         raise ExtractionError(f"Could not read {source} as a Jupyter notebook: {exc}") from exc
 
+    language = _kernel_kind(nb)
     blocks: list[Block] = []
     markdown: list[str] = []
     for cell in nb.cells:
@@ -46,7 +60,7 @@ def parse_notebook(source: str, data: bytes, *, source_kind: SourceKind) -> Extr
             if text:
                 markdown.append(text)
         elif cell_type == "code":
-            block = classify_notebook_cell(_cell_source(cell))
+            block = classify_notebook_cell(_cell_source(cell), language)
             if block is None:
                 continue
             block.idx = len(blocks)
@@ -60,5 +74,5 @@ def parse_notebook(source: str, data: bytes, *, source_kind: SourceKind) -> Extr
         source=source,
         title=_title(nb),
         blocks=blocks,
-        packages=detect_packages(blocks),
+        **library_fields(blocks),
     )

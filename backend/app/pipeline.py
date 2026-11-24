@@ -167,14 +167,12 @@ def run_check(
             else:
                 extraction = extract_url(source, deps.http_client, deps.settings)
         elif isinstance(source, PastedCode):
-            extraction = extract_paste(source.code, source.title)
+            extraction = extract_paste(source.code, source.title, source.language)
         else:
             extraction = extract_notebook(*source)
         if not extraction.blocks:
             raise ExtractionError("This page has no code blocks to check.")
-        runnable = sum(
-            block.kind in (StepKind.PYTHON, StepKind.REPL) for block in extraction.blocks
-        )
+        runnable = sum(is_runnable(block.kind) for block in extraction.blocks)
         if not runnable:
             raise ExtractionError(
                 "This page has code, but none of it is Python that WorksFr can run."

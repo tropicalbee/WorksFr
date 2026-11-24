@@ -1,16 +1,26 @@
 """Extraction from pasted text: Markdown with fenced code, or plain code. Never executed."""
 
 import ast
+from collections.abc import Callable
 from dataclasses import dataclass
 
-from app.extract.blocks import build_blocks, normalize_text, parse_python
-from app.extract.libs import detect_packages
+from app.extract.blocks import (
+    LANGUAGE_KINDS,
+    build_blocks,
+    detect_c_family,
+    has_js_markers,
+    looks_pythonish,
+    normalize_text,
+    parse_python,
+)
+from app.extract.libs import library_fields
 from app.extract.markdown_doc import parse_markdown
 from app.models import Block, Extraction, SourceFormat, SourceKind, StepKind
 
 PASTE_SOURCE = "Pasted code"
 _DEFAULT_TITLE = "Pasted code"
 _SHELL_PREFIXES = ("!", "%", "$ ", "pip install")
+_NODE_SHELL_PREFIXES = ("$ ", "pip install", "npm ", "npx ", "yarn ", "pnpm ")
 
 
 @dataclass(frozen=True)
@@ -19,18 +29,26 @@ class PastedCode:
 
     code: str
     title: str | None = None
+    language: str = "auto"
+    """`python`, `javascript`, `typescript`, `c`, `cpp` or `auto`."""
 
 
 def _is_shell_line(line: str) -> bool:
     return line.lstrip().startswith(_SHELL_PREFIXES)
 
 
-def _runs(lines: list[str]) -> list[tuple[bool, list[str]]]:
+def _is_node_shell_line(line: str) -> bool:
+    return line.lstrip().startswith(_NODE_SHELL_PREFIXES)
+
+
+def _runs(
+    lines: list[str], is_shell_line: Callable[[str], bool] = _is_shell_line
+) -> list[tuple[bool, list[str]]]:
     """Split lines into (is_shell, lines) runs. A shell line ending in a backslash continues."""
     runs: list[tuple[bool, list[str]]] = []
     continuing = False
     for line in lines:
-        shell = continuing or _is_shell_line(line)
+        shell = continuing or is_shell_line(line)
         continuing = shell and line.rstrip().endswith("\\")
         if runs and runs[-1][0] == shell:
             runs[-1][1].append(line)
@@ -89,9 +107,104 @@ def _plain_blocks(text: str) -> list[Block]:
     return [piece for piece in pieces if piece is not None]
 
 
-def extract_paste(code: str, title: str | None) -> Extraction:
+def _code_chunks(lines: list[str]) -> list[str]:
+    """Split C-like code at blank lines that sit at brace, bracket and paren depth 0.
+
+    Quotes, template strings and comments are skipped so a stray brace in them does not count.
+    """
+    chunks: list[list[str]] = [[]]
+    depth = 0
+    in_block_comment = False
+    in_template = False
+    for line in lines:
+        if not line.strip() and depth == 0 and not in_block_comment and not in_template:
+            if chunks[-1]:
+                chunks.append([])
+            continue
+        chunks[-1].append(line)
+        quote = ""
+        i = 0
+        while i < len(line):
+            char = line[i]
+            pair = line[i : i + 2]
+            if in_block_comment:
+                if pair == "*/":
+                    in_block_comment = False
+                    i += 1
+            elif in_template:
+                if char == "\\":
+                    i += 1
+                elif char == "`":
+                    in_template = False
+            elif quote:
+                if char == "\\":
+                    i += 1
+                elif char == quote:
+                    quote = ""
+            elif pair == "//":
+                break
+            elif pair == "/*":
+                in_block_comment = True
+                i += 1
+            elif char in "\"'":
+                quote = char
+            elif char == "`":
+                in_template = True
+            elif char in "{[(":
+                depth += 1
+            elif char in "}])":
+                depth = max(0, depth - 1)
+            i += 1
+    return ["
+".join(chunk) for chunk in chunks if chunk]
+
+
+def _language_blocks(text: str, kind: StepKind) -> list[Block]:
+    """Non-Python plain text: shell lines are shell steps, the rest is code in blank-line chunks."""
+    pieces: list[Block] = []
+    for is_shell, run in _runs(text.split("
+"), _is_node_shell_line):
+        if is_shell:
+            code = normalize_text("
+".join(run))
+            if code.strip():
+                pieces.append(Block(idx=0, kind=StepKind.SHELL, code=code))
+            continue
+        for chunk in _code_chunks(run):
+            code = normalize_text(chunk)
+            if code.strip():
+                pieces.append(Block(idx=0, kind=kind, code=code, runnable_code=code))
+    return pieces
+
+
+def _resolve_language(text: str, language: str) -> StepKind:
+    """The kind of a plain paste. `auto` is Python when the non-shell lines parse as Python,
+    else C or C++ for an `#include <`, else JavaScript. Python 2 style code with none of the
+    JavaScript signs stays Python so the sandbox reports its error."""
+    name = language.strip().lower()
+    if name in ("python", "py"):
+        return StepKind.PYTHON
+    if name in LANGUAGE_KINDS:
+        return LANGUAGE_KINDS[name]
+    python_lines = "
+".join(
+        line for is_shell, run in _runs(text.split("
+")) if not is_shell for line in run
+    )
+    if not python_lines.strip() or parse_python(python_lines) is not None:
+        return StepKind.PYTHON
+    c_family = detect_c_family(text)
+    if c_family is not None:
+        return c_family
+    if has_js_markers(text) or not looks_pythonish(python_lines):
+        return StepKind.JAVASCRIPT
+    return StepKind.PYTHON
+
+
+def extract_paste(code: str, title: str | None, language: str = "auto") -> Extraction:
     """Pasted text. With Markdown code fences each fenced block is a block and the rest is
-    ignored; otherwise the text is code, split into steps at blank lines between statements."""
+    ignored; otherwise the text is code, split into steps at blank lines between statements
+    (for Python) or at blank lines outside any braces (for the other languages)."""
     text = code.replace("\r\n", "\n").replace("\r", "\n")
     _, raws = parse_markdown(text)
     if raws:
@@ -99,7 +212,8 @@ def extract_paste(code: str, title: str | None) -> Extraction:
         for block in blocks:
             block.context = ""
     else:
-        blocks = _plain_blocks(text)
+        kind = _resolve_language(text, language)
+        blocks = _plain_blocks(text) if kind == StepKind.PYTHON else _language_blocks(text, kind)
         for index, block in enumerate(blocks):
             block.idx = index
     return Extraction(
@@ -108,5 +222,5 @@ def extract_paste(code: str, title: str | None) -> Extraction:
         source=PASTE_SOURCE,
         title=(title or "").strip() or _DEFAULT_TITLE,
         blocks=blocks,
-        packages=detect_packages(blocks),
+        **library_fields(blocks),
     )

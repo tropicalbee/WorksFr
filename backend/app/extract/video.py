@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from app.config import Settings
 from app.extract.errors import ExtractionError
-from app.extract.libs import detect_packages
+from app.extract.libs import library_fields
 from app.extract.routing import route_url
 from app.llm.pacing import PacingState, WaitCallback, pace, retry_after, wait
 from app.models import Block, Extraction, SourceFormat, SourceKind, StepKind
@@ -359,7 +359,7 @@ class VideoReader:
             source_format=SourceFormat.VIDEO,
             source=url,
             blocks=blocks,
-            packages=detect_packages(blocks),
+            **library_fields(blocks),
         )
 
 

@@ -12,6 +12,27 @@ from dataclasses import dataclass
 
 from app.models import Block, StepKind
 
+LANGUAGE_KINDS: dict[str, StepKind] = {
+    "js": StepKind.JAVASCRIPT,
+    "javascript": StepKind.JAVASCRIPT,
+    "jsx": StepKind.JAVASCRIPT,
+    "mjs": StepKind.JAVASCRIPT,
+    "cjs": StepKind.JAVASCRIPT,
+    "node": StepKind.JAVASCRIPT,
+    "ts": StepKind.TYPESCRIPT,
+    "typescript": StepKind.TYPESCRIPT,
+    "tsx": StepKind.TYPESCRIPT,
+    "c": StepKind.C,
+    "h": StepKind.C,
+    "cpp": StepKind.CPP,
+    "c++": StepKind.CPP,
+    "cc": StepKind.CPP,
+    "cxx": StepKind.CPP,
+    "hpp": StepKind.CPP,
+}
+"""Fence, HTML class and notebook kernel names for the non-Python languages that run.
+One table for every extractor. Python and shell names stay in the hint sets below."""
+
 PYTHON_HINTS = {"python", "python3", "py", "py3", "python2", "ipython", "jupyter", "pyi"}
 REPL_HINTS = {"pycon", "python-repl", "pycon3", "repl", "doctest"}
 SHELL_HINTS = {
@@ -20,8 +41,8 @@ SHELL_HINTS = {
 }  # fmt: skip
 OUTPUT_HINTS = {"output", "stdout", "result", "results", "traceback", "pytb", "py3tb"}
 OTHER_HINTS = {
-    "r", "java", "c", "cpp", "c++", "csharp", "cs", "go", "rust", "ruby", "php", "js",
-    "javascript", "typescript", "ts", "jsx", "tsx", "json", "jsonc", "yaml", "yml", "toml",
+    "r", "java", "csharp", "cs", "go", "rust", "ruby", "php", "json", "jsonc", "yaml", "yml",
+    "toml",
     "ini", "xml", "html", "css", "scss", "sql", "dockerfile", "makefile", "markdown", "md",
     "latex", "tex", "diff", "kotlin", "swift", "scala", "perl", "lua", "matlab", "julia",
     "vue", "graphql", "proto", "csv", "nginx", "apache", "properties",
@@ -38,6 +59,20 @@ _PYTHONISH = re.compile(
     r"(?:for|while|if|with)\s.+:\s*$|try:\s*$)",
     re.M,
 )
+_C_INCLUDE = re.compile(r"^[ \t]*#[ \t]*include[ \t]*<", re.M)
+_CPP_MARKERS = re.compile(
+    r"\bstd::|\bcout\b|\bcin\b|\bclass\s+\w|\bnamespace\b|\btemplate\s*<"
+    r"|^[ \t]*#[ \t]*include[ \t]*<(?:iostream|vector|string|map|set|memory|algorithm"
+    r"|functional|sstream|fstream|thread|mutex|chrono|cstdio|cstdlib|cstring)>",
+    re.M,
+)
+_JS_MARKERS = re.compile(
+    r"\brequire\s*\(|^[ \t]*import\b[^\n]*?\bfrom\s*['\"]|^[ \t]*import\s*['\"]"
+    r"|\bconsole\.\w+\s*\(|\bmodule\.exports\b"
+    r"|^[ \t]*export\s+(?:default|const|function|async)\b|\bfunction\s*\w*\s*\(",
+    re.M,
+)
+_JS_BINDING = re.compile(r"\b(?:const|let)\b")
 _JSON_NAMES = {"true", "false", "null", "nan", "inf", "infinity"}
 _MAX_TAIL_SCAN_LINES = 300
 
@@ -72,6 +107,24 @@ def parse_python(code: str) -> ast.Module | None:
         return ast.parse(code)
     except (SyntaxError, ValueError, RecursionError, MemoryError):
         return None
+
+
+def has_js_markers(text: str) -> bool:
+    return bool(_JS_MARKERS.search(text)) or (
+        "=>" in text and bool(_JS_BINDING.search(text))
+    )
+
+
+def looks_pythonish(text: str) -> bool:
+    """Whether the text has lines only Python is likely to start with (def, class, print(...))."""
+    return bool(_PYTHONISH.search(text))
+
+
+def detect_c_family(text: str) -> StepKind | None:
+    """C or C++ from an `#include <` line; C++ when it also uses `std::`, `cout` or a class."""
+    if not _C_INCLUDE.search(text):
+        return None
+    return StepKind.CPP if _CPP_MARKERS.search(text) else StepKind.C
 
 
 def _is_display_node(node: ast.expr) -> bool:
@@ -140,6 +193,9 @@ def _code_prefix(text: str) -> str | None:
 
 
 def _classify_python_text(text: str, without_output: str | None) -> tuple[StepKind, str | None]:
+    c_family = detect_c_family(text)
+    if c_family is not None:
+        return c_family, text
     if without_output and without_output != text and parse_python(without_output) is not None:
         return StepKind.PYTHON, without_output
     tree = parse_python(text)
@@ -149,6 +205,8 @@ def _classify_python_text(text: str, without_output: str | None) -> tuple[StepKi
         return StepKind.PYTHON, text
     if text.startswith("Traceback (most recent call last)"):
         return StepKind.OUTPUT, None
+    if has_js_markers(text):
+        return StepKind.JAVASCRIPT, text
     prefix = _code_prefix(text)
     if prefix is not None:
         return StepKind.PYTHON, prefix
@@ -167,6 +225,8 @@ def classify(text: str, hint: str | None, without_output: str | None = None) -> 
 def _classify(
     text: str, hint: str | None, without_output: str | None
 ) -> tuple[StepKind, str | None]:
+    if hint in LANGUAGE_KINDS:
+        return LANGUAGE_KINDS[hint], text
     if hint in OTHER_HINTS:
         return StepKind.OTHER, None
     if hint in SHELL_HINTS:
@@ -230,17 +290,21 @@ _SHELL_CELL_MAGICS = {"bash", "sh", "script", "shell"}
 _WRAPPER_CELL_MAGICS = {"time", "timeit", "capture", "prun", "python", "python3", "debug"}
 
 
-def classify_notebook_cell(code: str) -> Block | None:
+def classify_notebook_cell(code: str, language: StepKind = StepKind.PYTHON) -> Block | None:
     """A notebook code cell. Empty cells give None.
 
     Cells are python, with their `!` and `%` lines removed from `runnable_code` (comments
     left behind still count as code). When nothing is left, a cell of `!` lines is shell and
     one with `%` lines is other. `%%bash`-style cell magics mark the whole cell shell or
     other, except wrappers such as `%%time` whose first line is simply dropped.
+
+    A cell of a non-Python kernel (`language`) is that language's code as written.
     """
     text = normalize_text(code)
     if not text.strip():
         return None
+    if language != StepKind.PYTHON:
+        return Block(idx=0, kind=language, code=text, runnable_code=text)
     cell_magic = _CELL_MAGIC.match(text)
     if cell_magic and cell_magic.group(1).lower() not in _WRAPPER_CELL_MAGICS:
         shell = cell_magic.group(1).lower() in _SHELL_CELL_MAGICS
