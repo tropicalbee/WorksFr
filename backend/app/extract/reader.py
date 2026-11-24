@@ -120,6 +120,27 @@ def _login_page(reply: _Reply) -> bool:
     return "password" in reply.markdown.lower() and bool(_LOGIN_WORDS.search(reply.markdown))
 
 
+def _clean_blocks(blocks: list[RawBlock]) -> list[RawBlock]:
+    invisible = str.maketrans("", "", "\u200b\u200c\u200d\u2060\ufeff")
+    cleaned: list[RawBlock] = []
+    pending_context: list[str] = []
+    for block in blocks:
+        if block.context:
+            pending_context.append(block.context)
+        text = block.text.translate(invisible)
+        if not text.strip():
+            continue
+        block.context = "\n".join(pending_context)
+        pending_context.clear()
+        text = "\n".join(line if line.strip() else "" for line in text.split("\n"))
+        if cleaned and not block.context and cleaned[-1].hint == block.hint:
+            cleaned[-1].text += "\n" + text
+        else:
+            block.text = text
+            cleaned.append(block)
+    return cleaned
+
+
 def read_page(url: str, settings: Settings, client: httpx.Client) -> ReaderPage | None:
     """Code blocks of a JavaScript-rendered page via the first reader that finds any.
 
@@ -146,6 +167,7 @@ def read_page(url: str, settings: Settings, client: httpx.Client) -> ReaderPage 
                 "this page. Paste the code or upload the notebook instead."
             )
         title, blocks = parse_markdown(reply.markdown)
+        blocks = _clean_blocks(blocks)
         if blocks:
             return ReaderPage(name, title or reply.title, blocks)
         if _login_page(reply):

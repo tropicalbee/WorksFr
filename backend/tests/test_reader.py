@@ -6,6 +6,7 @@ from pydantic import SecretStr
 
 from app.config import Settings
 from app.extract import ExtractionError, extract_url
+from app.models import Extraction
 from app.pipeline import _redact
 
 URL = "https://example.com/post"
@@ -239,3 +240,114 @@ def test_reader_settings_defaults() -> None:
     assert settings.firecrawl_base_url == "https://api.firecrawl.dev"
     assert settings.jina_reader_base_url == "https://r.jina.ai/"
     assert settings.firecrawl_api_key.get_secret_value() == ""
+
+
+def _extract_firecrawl_markdown(markdown: str) -> Extraction:
+    result, calls = _run(
+        httpx.Response(200, text=SHELL),
+        _settings(reader_providers="firecrawl"),
+        httpx.Response(200, json={"success": True, "data": {"markdown": markdown}}),
+    )
+    assert calls == ["firecrawl"]
+    assert isinstance(result, Extraction)
+    return result
+
+
+def test_reader_joins_split_python_fences() -> None:
+    # Copies the shape of the real GeeksforGeeks Firecrawl reply from 2026-11-25.
+    result = _extract_firecrawl_markdown(
+        "# Pandas append\n\n"
+        "Append one dataframe to another.\n\n"
+        "```python\nimport pandas as pd\n```\n"
+        "```python\n\u200b\n```\n\n"
+        "```python\na = pd.DataFrame({'item': [1]})\n```\n\n"
+        "```python\n\u200b\n```\n"
+        "```python\nres = a.append(b)\n```\n"
+    )
+
+    assert result.fetched_via == "firecrawl"
+    assert result.title == "Pandas append"
+    assert [block.code for block in result.blocks] == [
+        "import pandas as pd\na = pd.DataFrame({'item': [1]})\nres = a.append(b)"
+    ]
+    assert result.blocks[0].context == "# Pandas append\nAppend one dataframe to another."
+
+
+def test_reader_removes_invisible_characters_and_keeps_blank_lines() -> None:
+    result = _extract_firecrawl_markdown(
+        "```python\n\ufeffim\u200bport pandas as pd\n  \u2060 \n"
+        "a = pd.Data\u200cFrame()\u200d\n```\n"
+    )
+
+    assert [block.code for block in result.blocks] == ["import pandas as pd\n\na = pd.DataFrame()"]
+
+
+def test_reader_keeps_fences_separated_by_prose() -> None:
+    result = _extract_firecrawl_markdown(
+        "```python\nimport pandas as pd\n```\n\n"
+        "Create a dataframe.\n\n"
+        "```python\na = pd.DataFrame()\n```\n"
+    )
+
+    assert [block.code for block in result.blocks] == ["import pandas as pd", "a = pd.DataFrame()"]
+    assert result.blocks[1].context == "Create a dataframe."
+
+
+def test_reader_keeps_fences_with_different_hints_separate() -> None:
+    result = _extract_firecrawl_markdown(
+        "```bash\npip install pandas\n```\n```python\nimport pandas as pd\n```\n"
+    )
+
+    assert [block.code for block in result.blocks] == ["pip install pandas", "import pandas as pd"]
+
+
+def test_reader_joins_untyped_fences_across_an_image_and_blank_lines() -> None:
+    result = _extract_firecrawl_markdown(
+        "```\nimport pandas as pd\n```\n\n"
+        "![Example](example.png)\n\n"
+        "```\na = pd.DataFrame()\n```\n"
+        "```python\nprint(a)\n```\n"
+    )
+
+    assert [block.code for block in result.blocks] == [
+        "import pandas as pd\na = pd.DataFrame()",
+        "print(a)",
+    ]
+
+
+def test_reader_treats_invisible_only_fences_as_no_code() -> None:
+    result = _extract_firecrawl_markdown(
+        "# Just prose\n\n```python\n\u200b\n```\n\n```python\n \u200c\u200d\u2060\ufeff\n```\n"
+    )
+
+    assert result.blocks == []
+    assert result.fetched_via is None
+
+
+def test_reader_keeps_prose_before_an_invisible_only_fence() -> None:
+    result = _extract_firecrawl_markdown(
+        "```python\nimport pandas as pd\n```\n\n"
+        "Output:\n\n"
+        "```python\n\u200b\n```\n"
+        "```python\na = pd.DataFrame()\n```\n"
+    )
+
+    assert [block.code for block in result.blocks] == ["import pandas as pd", "a = pd.DataFrame()"]
+    assert [block.context for block in result.blocks] == ["", "Output:"]
+
+
+def test_reader_preserves_prose_order_across_multiple_dropped_fences() -> None:
+    result = _extract_firecrawl_markdown(
+        "Use pandas.\n\n"
+        "```python\n\u200b\n```\n\n"
+        "Create a dataframe.\n\n"
+        "```python\n\u2060\n```\n\n"
+        "Start with one item.\n\n"
+        "```python\nimport pandas as pd\n```\n"
+        "```python\na = pd.DataFrame({'item': [1]})\n```\n"
+    )
+
+    assert [block.code for block in result.blocks] == [
+        "import pandas as pd\na = pd.DataFrame({'item': [1]})"
+    ]
+    assert result.blocks[0].context == "Use pandas.\nCreate a dataframe.\nStart with one item."
