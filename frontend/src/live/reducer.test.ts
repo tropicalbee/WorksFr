@@ -17,7 +17,7 @@ const score: components['schemas']['Score'] = {
 }
 const events: Event[] = [
   { type: 'extracted', blocks: [0, 1].map(idx => ({ idx, kind: 'python', code: 'x = 1', video_timestamp: null, low_confidence: false })), packages: [], title: 'Test', date_source: 'estimate', published: '2020-01-01' },
-  { type: 'environment', versions: { pandas: '2.2.3' }, failed_packages: ['missing'], install_pins: [{ step_idx: 0, line: 'pip install pandas==1', package: 'pandas', pinned: '==1', used: '2.2.3', origin: 'install_line' }] },
+  { type: 'environment', versions: { pandas: '2.2.3' }, failed_packages: ['missing'], install_pins: [{ step_idx: 0, line: 'pip install pandas==1', package: 'pandas', pinned: '==1', used: '2.2.3', ecosystem: 'pypi', origin: 'install_line' }] },
   { type: 'step_started', idx: 0 },
   { type: 'step_final', step: step(0) },
   { type: 'step_started', idx: 1 },

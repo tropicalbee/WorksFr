@@ -469,7 +469,7 @@ def test_failed_interaction_is_a_failed_chunk(settings: Settings) -> None:
             extract_video(URL, settings, http)
 
 
-@pytest.mark.parametrize("kind", ["javascript", "unknown"])
+@pytest.mark.parametrize("kind", ["java", "unknown"])
 def test_parser_rejects_unknown_kinds(kind: str) -> None:
     with pytest.raises((ValueError, ValidationError)):
         parse_reply(reply([block(kind=kind)]))

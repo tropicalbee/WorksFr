@@ -18,7 +18,7 @@ PROMPT = (
     "Do not fix, complete or invent code. If a block is cut off, copy only what is "
     "visible and set partial to true. For each block give start_seconds (whole seconds "
     "from the start of this clip, not the whole video, when it first appears), "
-    "kind (python, shell, output or file), code, and partial. "
+    "kind (python, javascript, typescript, c, cpp, shell, output or file), code, and partial. "
     "file: the contents of a non-Python file such as requirements.txt or .env. "
     'Return only JSON: {"blocks": [...]}.'
 )

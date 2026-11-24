@@ -142,7 +142,9 @@ def test_paste_auto_python_when_it_parses() -> None:
 
 
 def test_paste_auto_c_and_cpp() -> None:
-    c = extract_paste('#include <stdio.h>\nint main(void) {\n  puts("a");\n\n  return 0;\n}\n', None)
+    c = extract_paste(
+        '#include <stdio.h>\nint main(void) {\n  puts("a");\n\n  return 0;\n}\n', None
+    )
     assert [b.kind for b in c.blocks] == [StepKind.C]
     cpp = extract_paste("#include <iostream>\nint main() { std::cout << 1; }\n", None)
     assert cpp.blocks[0].kind == StepKind.CPP
@@ -290,7 +292,9 @@ def test_c_system_headers() -> None:
 
 
 def test_extraction_fields_for_markdown_fences() -> None:
-    result = extract_paste("```cpp\n#include <curl/curl.h>\n```\n```js\nrequire('chalk')\n```", None)
+    result = extract_paste(
+        "```cpp\n#include <curl/curl.h>\n```\n```js\nrequire('chalk')\n```", None
+    )
     assert [b.kind for b in result.blocks] == [StepKind.CPP, StepKind.JAVASCRIPT]
     assert result.c_system_headers == ["curl/curl.h"]
     assert result.npm_packages == ["chalk"]
@@ -314,7 +318,11 @@ def test_find_install_pins_reads_npm_install_lines() -> None:
             ecosystem="npm",
         ),
         InstallPin(
-            step_idx=0, line="pip install pandas==2.0", package="pandas", pinned="==2.0", used="2.1.0"
+            step_idx=0,
+            line="pip install pandas==2.0",
+            package="pandas",
+            pinned="==2.0",
+            used="2.1.0",
         ),
         InstallPin(
             step_idx=1, line="yarn add a@^1", package="a", pinned="^1", used=None, ecosystem="npm"
@@ -337,11 +345,27 @@ def test_js_only_page_is_not_rejected_as_non_python(monkeypatch: pytest.MonkeyPa
         started.append(check_id)
         return LocalRunnerSandbox(settings, runner_path=ROOT / "sandbox/runner.py")
 
-    deps = PipelineDeps(settings, factory, Proposer(), httpx.Client(
-        transport=httpx.MockTransport(lambda _: httpx.Response(200, text=body))
-    ), Cache())
+    deps = PipelineDeps(
+        settings,
+        factory,
+        Proposer(),
+        httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(200, text=body))),
+        Cache(),
+    )
     with deps.http_client:
         run_check("js", "https://example.com", deps, sink)
     failed = [e for e in sink.events if e.type == "failed"]
     assert not any("none of it is Python" in getattr(e, "error", "") for e in failed)
     assert started
+
+
+def test_paste_route_language_is_optional_and_limited() -> None:
+    from app.main import create_app
+
+    schema = create_app().openapi()["components"]["schemas"]["CodeSubmission"]
+    assert "language" not in schema.get("required", [])
+    options = {
+        item.get("const") or tuple(item.get("enum", ()))
+        for item in schema["properties"]["language"]["anyOf"]
+    }
+    assert ("python", "javascript", "typescript", "c", "cpp", "auto") in options

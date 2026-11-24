@@ -155,18 +155,15 @@ def _code_chunks(lines: list[str]) -> list[str]:
             elif char in "}])":
                 depth = max(0, depth - 1)
             i += 1
-    return ["
-".join(chunk) for chunk in chunks if chunk]
+    return ["\n".join(chunk) for chunk in chunks if chunk]
 
 
 def _language_blocks(text: str, kind: StepKind) -> list[Block]:
     """Non-Python plain text: shell lines are shell steps, the rest is code in blank-line chunks."""
     pieces: list[Block] = []
-    for is_shell, run in _runs(text.split("
-"), _is_node_shell_line):
+    for is_shell, run in _runs(text.split("\n"), _is_node_shell_line):
         if is_shell:
-            code = normalize_text("
-".join(run))
+            code = normalize_text("\n".join(run))
             if code.strip():
                 pieces.append(Block(idx=0, kind=StepKind.SHELL, code=code))
             continue
@@ -186,10 +183,8 @@ def _resolve_language(text: str, language: str) -> StepKind:
         return StepKind.PYTHON
     if name in LANGUAGE_KINDS:
         return LANGUAGE_KINDS[name]
-    python_lines = "
-".join(
-        line for is_shell, run in _runs(text.split("
-")) if not is_shell for line in run
+    python_lines = "\n".join(
+        line for is_shell, run in _runs(text.split("\n")) if not is_shell for line in run
     )
     if not python_lines.strip() or parse_python(python_lines) is not None:
         return StepKind.PYTHON

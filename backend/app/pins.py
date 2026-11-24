@@ -5,7 +5,7 @@ from collections.abc import Iterable
 
 from packaging.version import InvalidVersion, Version
 
-from app.extract.libs import packages_from_shell, pins_from_pip_line
+from app.extract.libs import npm_pins_from_line, packages_from_shell, pins_from_pip_line
 from app.models import InstallPin
 from app.packages import normalize
 
@@ -70,6 +70,17 @@ def find_install_pins(
                         package=package,
                         pinned=specifier,
                         used=installed.get(package),
+                    )
+                )
+            for package, specifier in npm_pins_from_line(line):
+                pins.append(
+                    InstallPin(
+                        step_idx=idx,
+                        line=line.strip(),
+                        package=package,
+                        pinned=specifier,
+                        used=installed.get(package),
+                        ecosystem="npm",
                     )
                 )
     seen: set[str] = set()

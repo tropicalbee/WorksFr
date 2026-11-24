@@ -109,7 +109,7 @@ def test_cant_verify_dependency_is_not_sent_to_repair() -> None:
         ("<article><p>Just prose.</p></article>", "This page has no code blocks to check."),
         (
             '<pre class="language-shell">pip install pandas</pre>'
-            '<pre class="language-javascript">const x = 1;</pre>'
+            '<pre class="language-java">int x = 1;</pre>'
             '<pre>{"x": 1}</pre>',
             "This page has code, but none of it is Python that WorksFr can run.",
         ),

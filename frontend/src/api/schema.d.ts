@@ -182,6 +182,8 @@ export interface components {
             code: string;
             /** Title */
             title?: string | null;
+            /** Language */
+            language?: ("python" | "javascript" | "typescript" | "c" | "cpp" | "auto") | null;
         };
         /**
          * DateSource
@@ -318,6 +320,12 @@ export interface components {
             /** Used */
             used: string | null;
             /**
+             * Ecosystem
+             * @default pypi
+             * @enum {string}
+             */
+            ecosystem: "pypi" | "npm";
+            /**
              * Origin
              * @default install_line
              * @enum {string}
@@ -443,7 +451,7 @@ export interface components {
          * StepKind
          * @enum {string}
          */
-        StepKind: "python" | "repl" | "shell" | "output" | "other";
+        StepKind: "python" | "repl" | "javascript" | "typescript" | "c" | "cpp" | "shell" | "output" | "other";
         /** StepReport */
         StepReport: {
             /** Idx */

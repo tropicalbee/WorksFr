@@ -34,7 +34,15 @@ from app.extract.libs import imported_modules, packages_from_shell
 from app.extract.routing import route_url
 from app.extract.video import VideoReader
 from app.extract.youtube_links import LOGIN_NOTE, extract_youtube_links
-from app.models import Block, Label, RepairAttempt, SourceFormat, StepKind, StepReport
+from app.models import (
+    Block,
+    Label,
+    RepairAttempt,
+    SourceFormat,
+    StepKind,
+    StepReport,
+    is_runnable,
+)
 from app.packages import guessed_distributions
 from app.pins import find_install_pins
 from app.repair.evidence import DocCache

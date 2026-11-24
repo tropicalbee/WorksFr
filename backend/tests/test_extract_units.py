@@ -189,7 +189,7 @@ def test_kind_table() -> None:
         StepKind.SHELL,
         StepKind.OUTPUT,
         StepKind.OUTPUT,
-        StepKind.OTHER,
+        StepKind.JAVASCRIPT,
         StepKind.OTHER,
         StepKind.SHELL,
     ]

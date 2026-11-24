@@ -110,9 +110,7 @@ def parse_python(code: str) -> ast.Module | None:
 
 
 def has_js_markers(text: str) -> bool:
-    return bool(_JS_MARKERS.search(text)) or (
-        "=>" in text and bool(_JS_BINDING.search(text))
-    )
+    return bool(_JS_MARKERS.search(text)) or ("=>" in text and bool(_JS_BINDING.search(text)))
 
 
 def looks_pythonish(text: str) -> bool:

@@ -14,8 +14,11 @@ from app.extract.errors import ExtractionError
 from app.extract.libs import library_fields
 from app.extract.routing import route_url
 from app.llm.pacing import PacingState, WaitCallback, pace, retry_after, wait
-from app.models import Block, Extraction, SourceFormat, SourceKind, StepKind
+from app.models import Block, Extraction, SourceFormat, SourceKind, StepKind, is_runnable
 from scripts.capture_video_reply import MISSING_CONFIG, PROMPT
+
+VideoKind = Literal["python", "javascript", "typescript", "c", "cpp", "shell", "output", "file"]
+_CODE_KINDS = {"python", "javascript", "typescript", "c", "cpp"}
 
 PRIVATE_VIDEO = (
     "This video isn't public, so it can't be read. Upload the notebook or paste the code instead."
@@ -46,7 +49,7 @@ _ENV_PROMPT = re.compile(r"^(?:\([^\r\n)]*\)[ \t]*)?\$[ \t]+")
 
 class VideoBlock(BaseModel):
     start_seconds: int = Field(ge=0)
-    kind: Literal["python", "shell", "output", "file"]
+    kind: VideoKind
     code: str
     partial: bool
 
@@ -92,7 +95,7 @@ def redact_code(
     text: str,
     key: str = "",
     *,
-    kind: Literal["python", "shell", "output", "file"] = "python",
+    kind: VideoKind = "python",
 ) -> str:
     """Mask literal secrets while preserving unquoted Python expressions."""
     if key:
@@ -108,7 +111,7 @@ def redact_code(
         return match.group(0)
 
     text = _SECRET_ASSIGNMENT.sub(mask_assignment, text)
-    if kind == "python":
+    if kind in _CODE_KINDS:
         return text
 
     def mask_unquoted_assignment(match: re.Match[str]) -> str:
@@ -345,7 +348,7 @@ class VideoReader:
                     idx=len(blocks),
                     kind=kind,
                     code=recovered_block.code,
-                    runnable_code=recovered_block.code if kind == StepKind.PYTHON else None,
+                    runnable_code=recovered_block.code if is_runnable(kind) else None,
                     context=context,
                     video_timestamp=recovered_block.start_seconds,
                     low_confidence=True,

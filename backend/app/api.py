@@ -3,7 +3,7 @@
 import asyncio
 import json
 from collections.abc import AsyncIterator
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import uuid4
 
 import nbformat
@@ -33,6 +33,7 @@ MAX_PASTE_CHARS = 200_000
 class CodeSubmission(BaseModel):
     code: str
     title: str | None = None
+    language: Literal["python", "javascript", "typescript", "c", "cpp", "auto"] | None = None
 
 
 class CheckCreated(BaseModel):
@@ -94,7 +95,7 @@ def submit_code(body: CodeSubmission, request: Request) -> CheckCreated:
         raise HTTPException(422, "Paste some code to check")
     if len(body.code) > MAX_PASTE_CHARS:
         raise HTTPException(422, "The pasted text is over the 200,000 character limit")
-    return _submit(request, PastedCode(body.code, body.title))
+    return _submit(request, PastedCode(body.code, body.title, body.language or "auto"))
 
 
 @router.post("/checks/notebook", response_model=CheckCreated)
