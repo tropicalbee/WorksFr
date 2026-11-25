@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { TriangleAlert, X } from 'lucide-react'
 import { Link } from 'react-router'
+import { loadRecentChecks } from '@/api/checkSource'
 import type { CheckReport } from '@/api/types'
 
 type State = { status: 'loading' } | { status: 'error' } | { status: 'ready'; checks: CheckReport[] }
@@ -56,11 +57,7 @@ export function RecentChecks() {
 
   useEffect(() => {
     const controller = new AbortController()
-    fetch('/api/checks', { signal: controller.signal })
-      .then(response => {
-        if (!response.ok) throw new Error(String(response.status))
-        return response.json() as Promise<CheckReport[]>
-      })
+    loadRecentChecks(controller.signal)
       .then(checks => setState({ status: 'ready', checks }))
       .catch(() => {
         if (!controller.signal.aborted) setState({ status: 'error' })

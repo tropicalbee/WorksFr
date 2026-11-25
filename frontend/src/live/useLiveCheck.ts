@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { fetchCheckReport, openCheckEvents } from '@/api/checkSource'
 import { applyEvent, initialLiveCheck } from './reducer'
 import type { CheckEvent, LiveCheck } from './reducer'
 
@@ -21,7 +22,6 @@ export function useLiveCheck(id: string): CheckLoadState {
     let disposed = false
     let stream: EventSource | null = null
     let current: LiveCheck | null = null
-    const url = `/api/checks/${encodeURIComponent(id)}`
 
     function publish(result: CheckLoadState) {
       if (!disposed) setLoaded({ id, result })
@@ -29,7 +29,7 @@ export function useLiveCheck(id: string): CheckLoadState {
 
     async function load() {
       try {
-        const response = await fetch(url, { signal: controller.signal })
+        const response = await fetchCheckReport(id, controller.signal)
         if (disposed) return
         if (!response.ok) {
           publish(response.status === 404
@@ -43,7 +43,8 @@ export function useLiveCheck(id: string): CheckLoadState {
         publish({ status: 'ready', check: current })
         if (report.status !== 'running') return
 
-        stream = new EventSource(`${url}/events`)
+        stream = openCheckEvents(id)
+        if (!stream) return
         for (const type of eventTypes) {
           stream.addEventListener(type, (message: MessageEvent<string>) => {
             if (disposed || !current) return

@@ -1,9 +1,12 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { ArrowRight, ClipboardPaste, Link2, Upload } from 'lucide-react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
+import { createCheck, isShowcase, loadRecentChecks } from '@/api/checkSource'
+import type { RecentCheck } from '@/api/checkSource'
 import type { components } from '@/api/schema'
 import { CHECK_INPUT_ID } from '@/components/checkInput'
+import { ExampleChips } from './ExampleChips'
 
 type CheckCreated = components['schemas']['CheckCreated']
 type ValidationError = components['schemas']['ValidationError']
@@ -27,8 +30,19 @@ export function CheckForm() {
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [checks, setChecks] = useState<RecentCheck[]>([])
+  const [showNotice, setShowNotice] = useState(false)
   const trimmed = url.trim()
   const canCheck = pasting ? code.trim().length > 0 : trimmed.length > 0
+
+  useEffect(() => {
+    if (!isShowcase) return
+    const controller = new AbortController()
+    void loadRecentChecks(controller.signal).then(items => {
+      if (!controller.signal.aborted) setChecks(items)
+    }).catch(() => { /* Recent checks displays a load failure. */ })
+    return () => controller.abort()
+  }, [])
 
   async function send(request: Promise<Response>) {
     setBusy(true)
@@ -50,30 +64,32 @@ export function CheckForm() {
 
   function submitUrl(event: FormEvent) {
     event.preventDefault()
+    if (isShowcase) {
+      setShowNotice(true)
+      return
+    }
     if (!canCheck || busy) return
     if (pasting) {
-      void send(fetch('/api/checks/code', {
-        method: 'POST',
+      void send(createCheck('code', {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code } satisfies components['schemas']['CodeSubmission']),
       }))
       return
     }
-    void send(fetch('/api/checks', {
-      method: 'POST',
+    void send(createCheck('url', {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: trimmed } satisfies components['schemas']['URLSubmission']),
     }))
   }
 
   function submitFile(file: File | undefined) {
-    if (!file || busy) return
+    if (isShowcase || !file || busy) return
     const body = new FormData()
     body.append('file', file)
-    void send(fetch('/api/checks/notebook', { method: 'POST', body }))
+    void send(createCheck('notebook', { body }))
   }
 
-  return (
+  return (<>
     <form className="lp-check" onSubmit={submitUrl}>
       <label className="lp-url">
         <Link2 aria-hidden="true" />
@@ -113,7 +129,7 @@ export function CheckForm() {
             event.target.value = ''
           }}
         />
-        <button type="button" className="lp-btn lp-btn-ghost" disabled={busy} onClick={() => fileInput.current?.click()}>
+        <button type="button" className="lp-btn lp-btn-ghost" disabled={busy} onClick={() => isShowcase ? setShowNotice(true) : fileInput.current?.click()}>
           <Upload aria-hidden="true" />Upload .ipynb
         </button>
         <button
@@ -121,15 +137,29 @@ export function CheckForm() {
           className="lp-btn lp-btn-ghost"
           disabled={busy}
           aria-expanded={pasting}
-          onClick={() => setPasting(open => !open)}
+          onClick={() => isShowcase ? setShowNotice(true) : setPasting(open => !open)}
         >
           <ClipboardPaste aria-hidden="true" />Paste code
         </button>
-        <button type="submit" className="lp-btn lp-btn-primary" disabled={busy || !canCheck}>
+        <button type="submit" className="lp-btn lp-btn-primary" disabled={busy || (!isShowcase && !canCheck)}>
           {busy ? 'Starting check…' : <>Check<ArrowRight aria-hidden="true" /></>}
         </button>
       </div>
       {error && <p className="lp-error" role="alert">{error}</p>}
+      {isShowcase && (
+        <div aria-live="polite">
+          {showNotice && (
+            <div className="text-sm">
+              <p>This is a read-only showcase. Live checks run on your own machine with Docker.</p>
+              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 underline underline-offset-2">
+                <Link to="/try">Run it yourself</Link>
+                {checks[0] && <Link to={`/checks/${encodeURIComponent(checks[0].id)}`}>See a checked tutorial</Link>}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </form>
-  )
+    {isShowcase && <ExampleChips checks={checks} />}
+  </>)
 }

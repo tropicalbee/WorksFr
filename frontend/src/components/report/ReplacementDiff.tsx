@@ -42,7 +42,7 @@ export function ReplacementDiff({ step }: { step: StepReport }) {
         <CornerDownRight aria-hidden="true" />
         {unverified
           ? 'Replacement got past the changed API; the live call was not verified'
-          : 'Replacement ran'}
+          : 'Ran in the sandbox. Read it before you run it on your machine.'}
       </p>
       <div className="api-chips">
         {step.apis_changed?.map(api => (

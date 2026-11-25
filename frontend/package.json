@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:showcase": "tsc -b && node --input-type=module -e \"process.env.VITE_SHOWCASE = '1'; const { build } = await import('vite'); await build({ configLoader: 'runner' })\"",
     "lint": "eslint .",
     "test": "vitest run",
     "gen:api": "openapi-typescript http://127.0.0.1:8000/openapi.json -o src/api/schema.d.ts"

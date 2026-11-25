@@ -27,6 +27,9 @@ export function ReportView({
   steps.forEach(step => blocks.set(step.idx, { idx: step.idx, kind: step.kind, code: step.original_code, video_timestamp: null, low_confidence: false }))
   const ordered = [...blocks.values()].sort((a, b) => a.idx - b.idx)
   const finished = new Map(steps.map(step => [step.idx, step]))
+  const failureMessage = report.error === 'This page has no code blocks to check.'
+    ? 'No code blocks to check.'
+    : report.error || 'The check failed without an error message.'
 
   return (
     <>
@@ -35,9 +38,9 @@ export function ReportView({
       <ReportHeader report={report} blocks={ordered} sample={sample} />
       {notice}
       {report.status === 'failed' && (
-        <p className="metadata mb-6 lg:ml-52" role="alert">
-          {report.error || 'The check failed without an error message.'}
-        </p>
+        <section className="failure-card mb-6" role="alert">
+          <h2>{failureMessage}</h2>
+        </section>
       )}
       <div className="step-list">
         {ordered.map(block => (

@@ -1,0 +1,143 @@
+[
+  {
+    "id": "dd6d02204c5f4d539d12e310ebc53467",
+    "source_kind": "url",
+    "source": "https://www.geeksforgeeks.org/python-pandas-dataframe-append/",
+    "title": "Python - Pandas dataframe.append() - GeeksforGeeks",
+    "published": "2018-11-20",
+    "date_source": "page",
+    "status": "done",
+    "created_at": "2026-11-25T08:05:53.295433+00:00",
+    "score": {
+      "works": 0,
+      "deprecated": 0,
+      "broken": 4,
+      "cant_verify": 0,
+      "fixed": 4,
+      "fixed_unverified": 0,
+      "still_run": 0,
+      "checked": 4,
+      "ratio": 0.0
+    },
+    "versions": {
+      "pandas": "3.1.1"
+    },
+    "failed_packages": [],
+    "install_pins": [],
+    "steps": [],
+    "error": null,
+    "showcase_label": "GeeksforGeeks: pandas append"
+  },
+  {
+    "id": "154f8713010747368a674e004bb69d88",
+    "source_kind": "url",
+    "source": "https://www.youtube.com/watch?v=_zN8QziXjd8",
+    "title": null,
+    "published": null,
+    "date_source": "unknown",
+    "status": "done",
+    "created_at": "2026-11-24T22:05:21.664633+00:00",
+    "score": {
+      "works": 16,
+      "deprecated": 0,
+      "broken": 9,
+      "cant_verify": 0,
+      "fixed": 7,
+      "fixed_unverified": 0,
+      "still_run": 16,
+      "checked": 25,
+      "ratio": 0.64
+    },
+    "versions": {
+      "pandas": "3.1.1"
+    },
+    "failed_packages": [],
+    "install_pins": [],
+    "steps": [],
+    "error": null,
+    "showcase_label": "YouTube: pandas video tutorial"
+  },
+  {
+    "id": "744f9bd26a5e457bb63113d7f7e1fce7",
+    "source_kind": "url",
+    "source": "https://stackoverflow.com/a/77292230",
+    "title": "OpenAI API error: \"Module 'openai' has no attribute 'ChatCompletion', did you mean 'Completion'?\"",
+    "published": "2023-10-14",
+    "date_source": "page",
+    "status": "done",
+    "created_at": "2026-11-24T16:59:25.590714+00:00",
+    "score": {
+      "works": 0,
+      "deprecated": 0,
+      "broken": 1,
+      "cant_verify": 0,
+      "fixed": 0,
+      "fixed_unverified": 1,
+      "still_run": 0,
+      "checked": 1,
+      "ratio": 0.0
+    },
+    "versions": {
+      "openai": "3.58.0"
+    },
+    "failed_packages": [],
+    "install_pins": [],
+    "steps": [],
+    "error": null,
+    "showcase_label": "Stack Overflow: OpenAI API answer"
+  },
+  {
+    "id": "875f76454aba47fd9cb2cdef62a3df0f",
+    "source_kind": "paste",
+    "source": "Pasted code",
+    "title": "lodash live",
+    "published": null,
+    "date_source": "unknown",
+    "status": "done",
+    "created_at": "2026-11-24T21:24:25.850332+00:00",
+    "score": {
+      "works": 2,
+      "deprecated": 1,
+      "broken": 0,
+      "cant_verify": 0,
+      "fixed": 0,
+      "fixed_unverified": 0,
+      "still_run": 3,
+      "checked": 3,
+      "ratio": 1.0
+    },
+    "versions": {},
+    "failed_packages": [],
+    "install_pins": [],
+    "steps": [],
+    "error": null,
+    "showcase_label": "JavaScript paste: lodash and Buffer"
+  },
+  {
+    "id": "82ff793d397644e78b35f213e1024da7",
+    "source_kind": "paste",
+    "source": "Pasted code",
+    "title": "C live 2",
+    "published": null,
+    "date_source": "unknown",
+    "status": "done",
+    "created_at": "2026-11-24T21:26:33.081778+00:00",
+    "score": {
+      "works": 4,
+      "deprecated": 0,
+      "broken": 0,
+      "cant_verify": 0,
+      "fixed": 0,
+      "fixed_unverified": 0,
+      "still_run": 4,
+      "checked": 4,
+      "ratio": 1.0
+    },
+    "versions": {},
+    "failed_packages": [],
+    "install_pins": [],
+    "steps": [],
+    "error": null,
+    "showcase_label": "C paste"
+  }
+]

@@ -3,6 +3,7 @@ import type { MouseEvent } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { Menu, X } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router'
+import { isShowcase } from '@/api/checkSource'
 import { Popover, PopoverContent, PopoverPortal, PopoverTrigger } from '@/components/ui/popover'
 import { focusCheckInput } from './checkInput'
 import './site-header.css'
@@ -54,6 +55,9 @@ export function SiteHeader({ nav: navProp, navLabel, width = 'landing' }: SiteHe
     navigate('/', { state: { focusCheck: true } })
   }
 
+  const checkLink = isShowcase ? '/try' : '/'
+  const onCheckClick = isShowcase ? () => setOpen(false) : startCheck
+
   return (
     <header className="site-header" data-scrolled={scrolled} data-width={width}>
       <div className="site-header-inner">
@@ -78,7 +82,7 @@ export function SiteHeader({ nav: navProp, navLabel, width = 'landing' }: SiteHe
       >
         <GithubMark />
       </a>
-      <Link to="/" className="site-header-cta sh-desktop" onClick={startCheck}>Check a tutorial</Link>
+      <Link to={checkLink} className="site-header-cta sh-desktop" onClick={onCheckClick}>Check a tutorial</Link>
       <Popover modal open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button
@@ -140,7 +144,7 @@ export function SiteHeader({ nav: navProp, navLabel, width = 'landing' }: SiteHe
               <GithubMark />
               GitHub
             </a>
-            <Link to="/" className="mobile-menu-cta" onClick={startCheck}>Check a tutorial</Link>
+            <Link to={checkLink} className="mobile-menu-cta" onClick={onCheckClick}>Check a tutorial</Link>
           </nav>
         </PopoverContent>
       </Popover>
