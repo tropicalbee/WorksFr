@@ -1,16 +1,16 @@
 /* Sticky site header. The header spans the full width; its inner row is centred to match the page below. */
 .site-header { position: sticky; top: 0; z-index: 30; border-bottom: 1px solid transparent; background: transparent; transition: background-color 150ms ease-out, border-color 150ms ease-out; }
-.site-header[data-scrolled='true'] { background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom-color: var(--border); }
+.site-header[data-scrolled='true'] { background: var(--bg); border-bottom-color: var(--border); }
 .site-header-inner { display: flex; align-items: center; gap: 28px; height: 64px; margin: 0 auto; width: min(1240px, calc(100% - 64px)); }
 .site-header[data-width='report'] .site-header-inner { width: min(1080px, calc(100% - 96px)); }
 @media (max-width: 900px) { .site-header-inner { width: calc(100% - 32px); } }
 @media (max-width: 1023px) { .site-header[data-width='report'] .site-header-inner { width: calc(100% - 48px); } }
-.site-header[data-scrolled='true']::before { background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom-color: var(--border); }
-.site-header .wordmark { margin-right: 4px; }
+.site-header .wordmark { margin-right: -8px; }
 .site-header-links { display: flex; align-items: center; gap: 16px; }
+.site-header-links::before { content: ''; flex-shrink: 0; width: 1px; height: 16px; margin-right: 4px; background: var(--border); }
 .site-header-links nav { display: flex; align-items: center; gap: 24px; }
-.site-header-links a { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; color: var(--text-3); font-size: 14px; font-weight: 500; }
-.site-header-links a:hover, .site-header-links a[aria-current='page'] { color: var(--text); }
+.site-header-links a { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; color: var(--text-3); font-size: 14px; font-weight: 400; transition: color 150ms ease-out; }
+.site-header-links a:hover, .site-header-links a:focus-visible, .site-header-links a[aria-current='page'] { color: var(--text); }
 .site-header-links svg { width: 16px; height: 16px; }
 .site-header-github { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 8px; color: var(--text-3); }
 .site-header-github:hover { color: var(--text); }
@@ -26,4 +26,4 @@
   .site-header .sh-desktop { display: none; }
   .site-header .mobile-menu-trigger { display: inline-flex; }
 }
-@media (prefers-reduced-motion: reduce) { .site-header { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .site-header, .site-header-links a { transition: none; } }

@@ -41,7 +41,7 @@ export function RunLogVisual() {
       <ul className="lp-limits">
         <li><WifiOff aria-hidden="true" />no network</li>
         <li><User aria-hidden="true" />non-root</li>
-        <li><Timer aria-hidden="true" />3 s step limit</li>
+        <li><Timer aria-hidden="true" />60 s step limit</li>
       </ul>
     </>
   )

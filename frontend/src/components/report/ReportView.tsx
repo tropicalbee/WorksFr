@@ -24,7 +24,14 @@ export function ReportView({
   const steps = report.steps ?? []
   const blocks = new Map<number, EventBlock>()
   liveState?.pendingBlocks.forEach(block => blocks.set(block.idx, block))
-  steps.forEach(step => blocks.set(step.idx, { idx: step.idx, kind: step.kind, code: step.original_code, video_timestamp: null, low_confidence: false }))
+  steps.forEach(step => blocks.set(step.idx, {
+    idx: step.idx,
+    kind: step.kind,
+    code: step.original_code,
+    video_timestamp: step.video_timestamp ?? null,
+    low_confidence: step.low_confidence,
+    read_agreement: step.read_agreement ?? null,
+  }))
   const ordered = [...blocks.values()].sort((a, b) => a.idx - b.idx)
   const finished = new Map(steps.map(step => [step.idx, step]))
   const failureMessage = report.error === 'This page has no code blocks to check.'
@@ -48,6 +55,7 @@ export function ReportView({
             key={block.idx}
             block={block}
             step={finished.get(block.idx)}
+            source={report.source}
             running={report.status === 'running' && liveState?.runningStepIndex === block.idx}
           />
         ))}

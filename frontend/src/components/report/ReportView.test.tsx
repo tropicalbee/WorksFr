@@ -52,3 +52,81 @@ it('shows the sandbox review note next to a verified replacement', () => {
   expect(markup).toContain('Replacement that ran')
   expect(markup).toContain('Ran in the sandbox. Read it before you run it on your machine.')
 })
+
+describe('steps read from a video', () => {
+  const base: StepReport = {
+    idx: 0, kind: 'python', original_code: 'x = 1', final_code: 'x = 1',
+    label: 'works', verdict: null, reason: '', explanation: '', output: '', low_confidence: false,
+  }
+  const videoReport: CheckReport = {
+    id: 'video-check',
+    source_kind: 'url',
+    source: 'https://www.youtube.com/watch?v=abc123',
+    status: 'done',
+    created_at: '2026-11-25T09:00:00+00:00',
+    date_source: 'unknown',
+    steps: [
+      { ...base, idx: 0, video_timestamp: 52, low_confidence: true },
+      { ...base, idx: 1, original_code: 'y = 2', final_code: 'y = 2' },
+    ],
+  }
+
+  it('shows the badge, a timestamp link and the misread note for a video step only', () => {
+    const markup = renderToStaticMarkup(<ReportView report={videoReport} />)
+    const [first, second] = markup.split('<article').slice(1)
+
+    expect(first).toContain('read from video')
+    expect(first).toContain('href="https://www.youtube.com/watch?v=abc123&amp;t=52s"')
+    expect(first).toContain('rel="noopener noreferrer"')
+    expect(first).toContain('>0:52</a>')
+    expect(first).toContain('May have been misread from the video.')
+    expect(second).not.toContain('read from video')
+    expect(second).not.toContain('video-time')
+  })
+
+  it('shows the badge for a live step and leaves the timestamp unlinked for a non-YouTube source', () => {
+    const markup = renderToStaticMarkup(<ReportView
+      report={{ ...videoReport, status: 'running', source: 'https://example.com/clip.mp4', steps: [] }}
+      liveState={{
+        runningStepIndex: 0,
+        pendingBlocks: [{ idx: 0, kind: 'python', code: 'x = 1', video_timestamp: 125, low_confidence: false }],
+      }}
+    />)
+
+    expect(markup).toContain('read from video')
+    expect(markup).toContain('<span class="video-time">2:05</span>')
+    expect(markup).not.toContain('misread')
+  })
+})
+
+describe('tutorial pins', () => {
+  const pinReport: CheckReport = {
+    id: 'pin-check',
+    source_kind: 'url',
+    source: 'https://example.com/tutorial',
+    status: 'done',
+    created_at: '2026-11-25T09:00:00+00:00',
+    date_source: 'unknown',
+    install_pins: [
+      { step_idx: 0, line: 'pip install pandas==0.24.2', package: 'pandas', pinned: '==0.24.2', used: '3.1.1', ecosystem: 'pypi', origin: 'install_line' },
+    ],
+  }
+
+  it('lists the pinned spec next to the version it was checked with', () => {
+    const markup = renderToStaticMarkup(<ReportView report={pinReport} />)
+
+    expect(markup).toContain('Tutorial pins')
+    expect(markup).toContain('pandas==0.24.2')
+    expect(markup).toContain('Checked with')
+    expect(markup).toContain('pandas 3.1.1')
+  })
+
+  it('says not installed when the pinned package was not installed', () => {
+    const markup = renderToStaticMarkup(<ReportView report={{
+      ...pinReport,
+      install_pins: [{ ...pinReport.install_pins![0], used: null }],
+    }} />)
+
+    expect(markup).toContain('not installed')
+  })
+})

@@ -84,6 +84,22 @@ pre { margin: 0; }
 .failed-packages ul { list-style: none; padding: 0; }
 .failed-packages li { display: flex; gap: 8px; align-items: center; font-family: 'JetBrains Mono Variable', monospace; font-size: 13px; }
 .failed-packages svg { color: var(--broken); }
+/* Video-read steps and tutorial pins. The badge repeats the landing card badge look. */
+.step-video { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.video-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 7px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--ink); font-size: 12px; font-weight: 500; }
+.video-badge svg { width: 13px; height: 13px; }
+.video-time { color: var(--text-3); font-family: 'JetBrains Mono Variable', monospace; font-size: 12px; font-variant-numeric: tabular-nums; }
+a.video-time { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--border-strong); }
+a.video-time:hover { text-decoration-color: currentColor; }
+.video-note { max-width: 168px; font-size: 12px; line-height: 1.45; }
+.tutorial-pins { margin-bottom: 24px; max-width: 520px; }
+.tutorial-pins h3 { font-size: 15px; margin-bottom: 4px; }
+.tutorial-pins ul { list-style: none; padding: 0; margin: 0; }
+.tutorial-pins li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.tutorial-pins svg { color: var(--text-4); }
+.pin-old { color: var(--text-3); }
+.pin-used code { color: var(--text); }
+.pin-used .metadata { font-size: 12px; }
 .failure-card { margin-left: 208px; }
 .failure-card p { margin-top: 12px; }
 footer { margin: 64px 0 0 208px; border-top: 1px solid var(--border); padding: 24px 0 40px; color: var(--text-4); font-size: 13px; }

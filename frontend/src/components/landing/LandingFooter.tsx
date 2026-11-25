@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router'
 import type { MouseEvent } from 'react'
+import { isShowcase } from '@/api/checkSource'
 import { focusCheckInput } from '@/components/checkInput'
 import './footer.css'
 
@@ -29,7 +30,7 @@ export function LandingFooter() {
           <ul>
             <li><Link to="/#how">How it works</Link></li>
             <li><Link to="/#recent">Recent checks</Link></li>
-            <li><Link to="/" onClick={startCheck}>Check a tutorial</Link></li>
+            <li>{isShowcase ? <Link to="/try">Check a tutorial</Link> : <Link to="/" onClick={startCheck}>Check a tutorial</Link>}</li>
             <li><a href={REPO_URL} target="_blank" rel="noopener noreferrer">Source on GitHub</a></li>
           </ul>
         </section>

@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Link, Route, Routes } from 'react-router'
+import { ScrollToTop } from '@/components/ScrollToTop'
 import { isShowcase } from '@/api/checkSource'
 
 const HomePage = lazy(() => import('./pages/HomePage'))
@@ -13,6 +14,7 @@ const ReportPreview = import.meta.env.DEV ? lazy(() => import('./preview/ReportP
 export default function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       {isShowcase && (
         <aside className="border-b border-border bg-card px-4 py-2 text-center text-sm">
           Showcase: saved reports from real checks.{' '}
