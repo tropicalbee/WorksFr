@@ -41,7 +41,7 @@ Reading videos needs these settings in `backend/.env`:
 | Setting | Meaning |
 | --- | --- |
 | `VIDEO_READER_API_KEY` | A Gemini API key. It can be the same key as `LLM_GEMINI_API_KEY`. |
-| `VIDEO_READER_MODEL` | The Gemini model to use. We use `gemini-3.1-flash-lite`. |
+| `VIDEO_READER_MODEL` | One Gemini model, or a comma-separated list in fallback order, for example `gemini-3.6-flash,gemini-3.1-flash-lite`. When a model is out of quota or overloaded, WorksFr moves to the next one. If every model fails, the check says the problem is on Google's side. |
 | `VIDEO_READS` | How many times each 5-minute chunk is read. The default is 2. Set 1 to halve the number of calls. |
 
 Code read off a screen can be wrong, so the backend marks every video step as low confidence ("may have been misread"). The web page doesn't show that mark or a timestamp link yet. A 15-minute video took about 15 minutes to check.
@@ -93,7 +93,7 @@ Copy-Item .env.example .env
 uvicorn app.main:app --reload
 ```
 
-Fill in your API keys and model names in `backend/.env` before you run a check. `.env.example` lists every setting with its default.
+Fill in your API keys and model names in `backend/.env` before you run a check. `.env.example` lists every setting with its default. Model names have no default: copy a model id from the provider's model list (build.nvidia.com, console.groq.com/docs/models or ai.google.dev/gemini-api/docs/models) into `LLM_<NAME>_MODEL`. A provider with no key or no model is skipped, and the backend log says so at startup.
 
 Start the frontend in a second terminal:
 
@@ -110,6 +110,7 @@ Open http://localhost:5173.
 From `backend/`, with the virtual environment active:
 
 ```powershell
+pip install -r requirements-dev.txt
 pytest -m "not docker and not llm"
 ruff check .
 ```
@@ -170,6 +171,7 @@ assets/     README screenshots
 - The repair loop patches one step at a time. Fixes that need changes across several steps may fail.
 - Video checks depend on Gemini. Free-tier quotas run out (429) and the model is sometimes overloaded (503). The check then stops with a clear message. A misread video step can show as Broken.
 - Video checks are titled "Untitled tutorial", because WorksFr doesn't fetch the video title.
+- The sandbox caps each file at 256 MB and `/tmp` at 512 MB (`SANDBOX_FILE_SIZE_MB`, `SANDBOX_TMPFS_MB`). A package whose download is bigger than that, such as PyTorch, doesn't install, and its steps are marked "Can't verify". TensorFlow and Keras are already in the image.
 - One check runs at a time by default (`MAX_CONCURRENT_CHECKS`). A check stops after 15 minutes (`CHECK_TIMEOUT_SECONDS`, default 900).
 - Pages whose code is loaded by JavaScript need a page reader (a Firecrawl key, or Jina). Pages that refuse WorksFr or ask for a login are not read.
 
