@@ -2,6 +2,8 @@
 
 WorksFr checks whether a coding tutorial still works with today's library versions. It runs every code step in a Docker sandbox and labels it. When a Python step is broken, WorksFr finds out what changed in the library, writes a replacement, and shows it only after the replacement has run without an error.
 
+Live showcase with saved reports from real checks: https://worksfr-showcase.onrender.com. Live checks run on your own machine; see [Setup](#setup).
+
 ![WorksFr home page with a link box, Upload .ipynb and Paste code](assets/home.png)
 
 ![A report for a pandas tutorial: 0 of 4 checkable steps still run, with the replacement that ran for step 1](assets/check.png)
