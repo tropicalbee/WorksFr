@@ -6,6 +6,7 @@ import { createCheck, isShowcase, loadRecentChecks } from '@/api/checkSource'
 import type { RecentCheck } from '@/api/checkSource'
 import type { components } from '@/api/schema'
 import { CHECK_INPUT_ID } from '@/components/checkInput'
+import type { FeaturedExample } from './caseStudies'
 import { ExampleChips } from './ExampleChips'
 
 type CheckCreated = components['schemas']['CheckCreated']
@@ -22,7 +23,7 @@ async function errorMessage(response: Response): Promise<string> {
   return `The server returned an error (${response.status}).`
 }
 
-export function CheckForm() {
+export function CheckForm({ featured }: { featured?: FeaturedExample[] }) {
   const navigate = useNavigate()
   const fileInput = useRef<HTMLInputElement>(null)
   const [url, setUrl] = useState('')
@@ -111,7 +112,7 @@ export function CheckForm() {
           value={code}
           onChange={event => setCode(event.target.value)}
           onKeyDown={event => { if (event.key === 'Escape') setPasting(false) }}
-          placeholder="Paste Python code or a Markdown snippet with code blocks"
+          placeholder="Paste Python, JavaScript, TypeScript, C or C++ code, or Markdown with code blocks"
           aria-label="Pasted code"
           spellCheck={false}
           autoFocus
@@ -160,6 +161,6 @@ export function CheckForm() {
         </div>
       )}
     </form>
-    {isShowcase && <ExampleChips checks={checks} />}
+    {isShowcase && <ExampleChips featured={featured} checks={checks} />}
   </>)
 }

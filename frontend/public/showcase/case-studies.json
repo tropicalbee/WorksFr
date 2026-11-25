@@ -23,7 +23,8 @@
       "cause": "pandas DataFrame.append removed (pandas 2.0)",
       "library_break": true,
       "hit_time_limit": false,
-      "unverified_reason": null
+      "unverified_reason": null,
+      "cause_plain": "Uses a pandas feature that was removed"
     },
     {
       "check_id": "83b633af0f77436aab1adc6477a9cde7",
@@ -42,7 +43,8 @@
       "cause": "pandas DataFrame.append removed; Jupyter-only display()",
       "library_break": true,
       "hit_time_limit": false,
-      "unverified_reason": null
+      "unverified_reason": null,
+      "cause_plain": "Uses a removed pandas feature; one step only works in Jupyter"
     },
     {
       "check_id": "624546eeeda94487b11c589ef8a0f03e",
@@ -61,7 +63,8 @@
       "cause": "pandas DataFrame.append removed",
       "library_break": true,
       "hit_time_limit": false,
-      "unverified_reason": null
+      "unverified_reason": null,
+      "cause_plain": "Uses a removed pandas feature"
     },
     {
       "check_id": "97907024b9fd4181b0579e7cbe9ec4ca",
@@ -80,7 +83,8 @@
       "cause": "A page error (undefined Index); later steps need a CSV the page doesn't include",
       "library_break": false,
       "hit_time_limit": false,
-      "unverified_reason": "data-file step"
+      "unverified_reason": "data-file step",
+      "cause_plain": "A mistake on the page; later steps need a data file it doesn't include"
     },
     {
       "check_id": "d1bf5ddd918c42139d9d5abbe0ebf88b",
@@ -99,7 +103,8 @@
       "cause": "pandas 3 string dtype and read_json changes; also 5 page typos and a missing openpyxl",
       "library_break": true,
       "hit_time_limit": false,
-      "unverified_reason": null
+      "unverified_reason": null,
+      "cause_plain": "Pandas 3 changed how text and JSON load; also typos on the page and a missing add-on"
     },
     {
       "check_id": "1caef9fe0efe4e5e8d6f69dabdf5e408",
@@ -118,7 +123,8 @@
       "cause": "openai.ChatCompletion removed (openai 1.0)",
       "library_break": true,
       "hit_time_limit": false,
-      "unverified_reason": "live API call"
+      "unverified_reason": "live API call",
+      "cause_plain": "Uses an OpenAI call that was removed"
     },
     {
       "check_id": "7b9ee2ab20b8449a8575d7d8686e0ca9",
@@ -137,7 +143,8 @@
       "cause": "pandas DataFrame.append removed; also output pasted into code",
       "library_break": true,
       "hit_time_limit": false,
-      "unverified_reason": null
+      "unverified_reason": null,
+      "cause_plain": "Uses a removed pandas feature; output was pasted into the code"
     },
     {
       "check_id": "5e83b305e8014feea5a1d8992f1e70bd",
@@ -156,7 +163,8 @@
       "cause": "pandera SchemaModel and pandas nested renamer removed; also 4 page typos",
       "library_break": true,
       "hit_time_limit": true,
-      "unverified_reason": null
+      "unverified_reason": null,
+      "cause_plain": "Uses two removed features; also typos on the page"
     },
     {
       "check_id": "ad27c7c8bb3246609a95083be0c4f398",
@@ -175,7 +183,8 @@
       "cause": "pandas DataFrame.append removed",
       "library_break": true,
       "hit_time_limit": false,
-      "unverified_reason": null
+      "unverified_reason": null,
+      "cause_plain": "Uses a removed pandas feature"
     },
     {
       "check_id": "d69d0eccb0da48fd962cd979c195b152",
@@ -194,7 +203,8 @@
       "cause": "Runs as written; live API calls can't be checked",
       "library_break": false,
       "hit_time_limit": false,
-      "unverified_reason": null
+      "unverified_reason": null,
+      "cause_plain": "Runs as written; steps that call a live service can't be checked"
     },
     {
       "check_id": "10debc221f9e471c9e88085bbadb70da",
@@ -213,7 +223,8 @@
       "cause": "openai.ChatCompletion removed (openai 1.0)",
       "library_break": true,
       "hit_time_limit": false,
-      "unverified_reason": "live API call"
+      "unverified_reason": "live API call",
+      "cause_plain": "Uses an OpenAI call that was removed"
     },
     {
       "check_id": "1605f1bcb2204dffac81eb67083101c8",
@@ -232,7 +243,8 @@
       "cause": "TensorFlow 1 APIs removed (Session, placeholder, get_variable)",
       "library_break": true,
       "hit_time_limit": true,
-      "unverified_reason": null
+      "unverified_reason": null,
+      "cause_plain": "Written for TensorFlow 1, whose main calls were removed"
     }
   ],
   "tutorial_totals": {
@@ -273,5 +285,27 @@
       "c8ab6aec8cfe4f34812f1ea9dc6f2428"
     ]
   },
-  "selection": "Hand-picked: about half chosen because they use APIs known to have changed, half because they looked current. 8 of 12 are pandas. This shows what WorksFr finds, not how often tutorials break."
+  "selection": "Hand-picked: about half chosen because they use APIs known to have changed, half because they looked current. 8 of 12 are pandas. This shows what WorksFr finds, not how often tutorials break.",
+  "featured_examples": [
+    {
+      "check_id": "154f8713010747368a674e004bb69d88",
+      "label": "YouTube video report",
+      "kind": "YouTube"
+    },
+    {
+      "check_id": "31850927692f4f21b317bee8a572e094",
+      "label": "GeeksforGeeks pandas append",
+      "kind": "Article"
+    },
+    {
+      "check_id": "97907024b9fd4181b0579e7cbe9ec4ca",
+      "label": "Habr ODS course",
+      "kind": "Article"
+    },
+    {
+      "check_id": "36857b3f28a746de8b64493e2a715ea3",
+      "label": "Claude Code via MCP",
+      "kind": "Agent"
+    }
+  ]
 }

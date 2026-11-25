@@ -21,7 +21,7 @@ import { GridPattern } from '@/components/ui/grid-pattern'
 import { ShineBorder } from '@/components/ui/shine-border'
 import '@/components/landing/landing.css'
 
-const HEADLINE_LEAD = 'Check whether a Python tutorial'
+const HEADLINE_LEAD = 'Check whether a coding tutorial'
 const HEADLINE_TAILS = [
   "still runs with today's libraries",
   'in a Jupyter notebook still runs',
@@ -59,9 +59,11 @@ export default function HomePage() {
           <p className="lp-eyebrow">Tutorial check</p>
           <HeroHeadline lead={HEADLINE_LEAD} tails={HEADLINE_TAILS} />
           <p className="lp-sub">
-            Paste a link or upload a notebook. WorksFr runs each step in a sandbox with today's library versions and shows a replacement for each broken line, once that replacement has run without an error.
+            Paste a link or upload a notebook. WorksFr runs each step in a sandbox with today's library versions.
+            Python, JavaScript, TypeScript, C and C++ steps are run and labelled, and a broken Python line gets a
+            replacement once it has run without an error.
           </p>
-          <CheckForm />
+          <CheckForm featured={caseStudies?.featured_examples} />
           {caseStudies && <CaseStudyStats data={caseStudies} />}
         </div>
         <div className="lp-bento" id="how">

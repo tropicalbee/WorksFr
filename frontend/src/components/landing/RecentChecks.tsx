@@ -1,65 +1,55 @@
 import { useEffect, useState } from 'react'
-import { TriangleAlert, X } from 'lucide-react'
+import { ArrowRight, X } from 'lucide-react'
 import { Link } from 'react-router'
 import { loadRecentChecks } from '@/api/checkSource'
 import type { RecentCheck } from '@/api/checkSource'
-import type { CheckReport } from '@/api/types'
+import { formatRecentCheck } from './caseStudies'
 
-type State = { status: 'loading' } | { status: 'error' } | { status: 'ready'; checks: RecentCheck[] }
+type State = { status: 'loading' } | { status: 'error' } | { status: 'ready'; checks: RecentCheck[]; loadedAt: number }
 
-function sourceHost(check: CheckReport): string {
-  if (check.source_kind === 'notebook') return 'uploaded notebook'
-  if (check.source_kind === 'paste') return 'pasted code'
-  try {
-    return new URL(check.source).hostname.replace(/^www\./, '')
-  } catch {
-    return check.source
-  }
-}
+const INITIAL_ROWS = 6
 
-function relativeTime(iso: string): string {
-  const then = Date.parse(iso)
-  if (Number.isNaN(then)) return ''
-  const seconds = Math.max(0, Math.round((Date.now() - then) / 1000))
-  if (seconds < 60) return 'just now'
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes} min ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours} h ago`
-  const days = Math.floor(hours / 24)
-  return days === 1 ? 'Yesterday' : `${days} days ago`
-}
+function RecentRow({ check, loadedAt }: { check: RecentCheck; loadedAt: number }) {
+  const row = formatRecentCheck(check, loadedAt)
+  const counts = [
+    { label: 'Works', value: row.works },
+    { label: 'Broken', value: row.broken },
+    { label: 'Fixed', value: row.fixed, unverified: row.unverified },
+    { label: "Can't verify", value: row.cantVerify },
+  ]
 
-function Counts({ check }: { check: CheckReport }) {
-  const { score } = check
-  if (!score) {
-    if (check.status === 'running') return <span className="lp-muted">Running</span>
-    if (check.status === 'failed') return <span className="lp-muted">Stopped</span>
-    return <span />
-  }
   return (
-    <div className="lp-rcounts">
-      {score.broken > 0 && <span className="lp-status lp-s-broken"><X aria-hidden="true" />{score.broken} broken</span>}
-      {score.fixed > 0 && <span className="lp-status lp-s-fixed">{score.fixed} fixed</span>}
-      {score.fixed_unverified > 0 && (
-        <span className="lp-status lp-s-fixed">{score.fixed_unverified} fixed, live call unverified</span>
-      )}
-      {score.deprecated > 0 && (
-        <span className="lp-status lp-s-dep"><TriangleAlert aria-hidden="true" />{score.deprecated} deprecated</span>
-      )}
-      {score.works > 0 && <span className="lp-status lp-s-works"><span className="lp-dot" />{score.works} work</span>}
-      {score.cant_verify > 0 && <span className="lp-status lp-s-unch">{score.cant_verify} can't verify</span>}
-    </div>
+    <tr className="lp-result-row lp-recent-row" role="row">
+      <th className="lp-result-title" scope="row" role="rowheader">
+        <Link className="lp-recent-link" to={`/checks/${encodeURIComponent(check.id)}`}>{row.title}</Link>
+        <span className="lp-result-meta">{row.host}{row.status && ` · ${row.status}`}</span>
+      </th>
+      {counts.map(({ label, value, unverified }) => (
+        <td key={label} className="lp-result-count" role="cell">
+          <span className="lp-result-mobile-label" aria-hidden="true">{label}</span>
+          <span data-zero={value === '–'}>{value}</span>
+          {!!unverified && (
+            <span className="lp-result-note" title="Replacement verification incomplete">+{unverified} unverified</span>
+          )}
+        </td>
+      ))}
+      <td className="lp-recent-when" role="cell">
+        {row.when ? <time dateTime={check.created_at}>{row.when}</time> : '–'}
+      </td>
+    </tr>
   )
 }
 
 export function RecentChecks() {
   const [state, setState] = useState<State>({ status: 'loading' })
+  const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
     const controller = new AbortController()
     loadRecentChecks(controller.signal)
-      .then(checks => setState({ status: 'ready', checks }))
+      .then(checks => {
+        if (!controller.signal.aborted) setState({ status: 'ready', checks, loadedAt: Date.now() })
+      })
       .catch(() => {
         if (!controller.signal.aborted) setState({ status: 'error' })
       })
@@ -67,26 +57,57 @@ export function RecentChecks() {
   }, [])
 
   return (
-    <section className="lp-recent" id="recent" aria-labelledby="recent-heading">
+    <section className="lp-evidence-section lp-recent" id="recent" aria-labelledby="recent-heading">
       <h2 id="recent-heading">Recent checks</h2>
       {state.status === 'loading' && <p className="lp-muted">Loading recent checks…</p>}
       {state.status === 'error' && <p className="lp-muted">Recent checks could not be loaded.</p>}
       {state.status === 'ready' && state.checks.length === 0 && <p className="lp-muted">No checks yet.</p>}
       {state.status === 'ready' && state.checks.length > 0 && (
-        <ul className="lp-rlist">
-          {state.checks.map(check => (
-            <li key={check.id}>
-              <Link to={`/checks/${check.id}`}>
-                <div className="lp-rmain">
-                  <span className="lp-rtitle">{check.showcase_label?.trim() || check.title || 'Untitled tutorial'}</span>
-                  <span className="lp-rhost">{sourceHost(check)}</span>
-                </div>
-                <Counts check={check} />
-                <span className="lp-rtime">{relativeTime(check.created_at)}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <>
+          <table id="recent-checks-table" className="lp-results-table lp-recent-table" role="table" aria-labelledby="recent-heading">
+            <colgroup>
+              <col />
+              <col className="lp-recent-count-column" span={3} />
+              <col className="lp-recent-unchecked-column" />
+              <col className="lp-recent-time-column" />
+            </colgroup>
+            <thead role="rowgroup">
+              <tr role="row">
+                <th scope="col" role="columnheader">Tutorial</th>
+                <th className="lp-result-align" scope="col" role="columnheader">
+                  <span className="lp-mark-dot lp-mark-works" aria-hidden="true" />Works
+                </th>
+                <th className="lp-result-align" scope="col" role="columnheader">
+                  <X className="lp-mark-broken" aria-hidden="true" />Broken
+                </th>
+                <th className="lp-result-align" scope="col" role="columnheader">
+                  <span className="lp-mark-dot lp-mark-fixed" aria-hidden="true" />Fixed
+                </th>
+                <th className="lp-result-align" scope="col" role="columnheader">
+                  <span className="lp-mark-dot lp-mark-unchecked" aria-hidden="true" />Can't verify
+                </th>
+                <th className="lp-result-align" scope="col" role="columnheader">When</th>
+              </tr>
+            </thead>
+            <tbody role="rowgroup">
+              {(expanded ? state.checks : state.checks.slice(0, INITIAL_ROWS)).map(check => (
+                <RecentRow key={check.id} check={check} loadedAt={state.loadedAt} />
+              ))}
+            </tbody>
+          </table>
+          {state.checks.length > INITIAL_ROWS && (
+            <button
+              className="lp-recent-more"
+              type="button"
+              aria-expanded={expanded}
+              aria-controls="recent-checks-table"
+              onClick={() => setExpanded(value => !value)}
+            >
+              <span>{expanded ? 'Show fewer' : `Show all ${state.checks.length}`}</span>
+              {!expanded && <ArrowRight size={14} aria-hidden="true" />}
+            </button>
+          )}
+        </>
       )}
     </section>
   )
