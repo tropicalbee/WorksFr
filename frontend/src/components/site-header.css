@@ -9,7 +9,7 @@
 .site-header-links { display: flex; align-items: center; gap: 16px; }
 .site-header-links::before { content: ''; flex-shrink: 0; width: 1px; height: 16px; margin-right: 4px; background: var(--border); }
 .site-header-links nav { display: flex; align-items: center; gap: 24px; }
-.site-header-links a { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; color: var(--text-3); font-size: 14px; font-weight: 400; transition: color 150ms ease-out; }
+.site-header-links a { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; color: var(--text-3); font-size: 14px; font-weight: 400; white-space: nowrap; transition: color 150ms ease-out; }
 .site-header-links a:hover, .site-header-links a:focus-visible, .site-header-links a[aria-current='page'] { color: var(--text); }
 .site-header-links svg { width: 16px; height: 16px; }
 .site-header-github { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 8px; color: var(--text-3); }
@@ -22,7 +22,11 @@
 .site-header .mobile-menu-trigger { display: none; margin-left: auto; }
 .mobile-menu-panel .mobile-menu-cta { margin-top: 4px; justify-content: center; background: var(--text); color: var(--bg); font-weight: 600; }
 .mobile-menu-panel .mobile-menu-cta:hover { background: var(--text-2); color: var(--bg); }
-@media (max-width: 767px) {
+@media (768px <= width <= 900px) {
+  .site-header-inner, .site-header-links, .site-header-links nav { gap: 12px; }
+  .site-header-github + .site-header-cta { margin-left: 0; }
+}
+@media (width < 768px) {
   .site-header .sh-desktop { display: none; }
   .site-header .mobile-menu-trigger { display: inline-flex; }
 }

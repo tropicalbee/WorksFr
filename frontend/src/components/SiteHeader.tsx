@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { MouseEvent } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { Menu, X } from 'lucide-react'
+import { House, Menu, X } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { isShowcase } from '@/api/checkSource'
 import { Popover, PopoverContent, PopoverPortal, PopoverTrigger } from '@/components/ui/popover'
@@ -25,10 +25,12 @@ export function SiteHeader({ nav: navProp, navLabel, width = 'landing' }: SiteHe
   const { pathname, hash } = useLocation()
   const navigate = useNavigate()
   const onHome = pathname === '/'
-  const nav: SiteNavLink[] = navProp ?? [
+  const links: SiteNavLink[] = navProp ?? [
     { label: 'How it works', to: '/#how', current: onHome && hash === '#how' },
+    { label: 'Case studies', to: '/#case-studies', current: onHome && hash === '#case-studies' },
     { label: 'Recent checks', to: '/#recent', current: onHome && hash === '#recent' },
   ]
+  const nav: SiteNavLink[] = onHome ? links : [{ label: 'Home', to: '/', icon: House }, ...links]
   const [open, setOpen] = useState(false)
   const [scrolled, setScrolled] = useState(() => window.scrollY > 8)
   const panelId = useId()
