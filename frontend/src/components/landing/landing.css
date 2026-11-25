@@ -148,6 +148,40 @@
 @keyframes lp-spin-out { 0% { transform: rotate(0) scale(1); } 85% { transform: rotate(300deg) scale(1); } 100% { transform: rotate(360deg) scale(0); } }
 @keyframes lp-blink { 50% { visibility: hidden; } }
 
+/* case studies */
+.lp-case-stats { max-width: 900px; margin-top: 28px; }
+.lp-case-stats ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-block: 1px solid var(--border); }
+.lp-case-stats li { display: grid; align-content: start; gap: 4px; padding: 14px 18px; color: var(--text-2); font-size: 14px; }
+.lp-case-stats li + li { border-inline-start: 1px solid var(--border); }
+.lp-case-stats strong { font-size: clamp(28px, 4vw, 38px); font-weight: 600; letter-spacing: -.02em; line-height: 1.1; }
+.lp-case-stats p { margin-top: 10px; }
+.lp-case-stats, .lp-case-table, .lp-case-detail { font-variant-numeric: tabular-nums; }
+.lp-case-broken { color: var(--broken); }
+.lp-case-fixed { color: var(--ink); }
+.lp-case-unchecked { color: var(--unchecked); }
+.lp-case-link { color: var(--text); text-decoration: underline; text-decoration-color: var(--text-3); text-underline-offset: 3px; }
+.lp-case-link:hover { text-decoration-color: currentColor; }
+.lp-case-studies { margin-top: 48px; scroll-margin-top: 86px; color: var(--text-2); font-size: 14px; line-height: 1.55; }
+.lp-case-studies h2, .lp-case-studies h3 { color: var(--text); font-weight: 590; }
+.lp-case-studies h2 { font-size: 22px; letter-spacing: -.01em; margin-bottom: 8px; }
+.lp-case-studies p { max-width: 78ch; overflow-wrap: anywhere; }
+.lp-case-table { margin: 18px 0 0; width: 100%; table-layout: fixed; }
+.lp-case-table th, .lp-case-table td { border-bottom: 1px solid var(--border); padding: 12px clamp(8px, 1vw, 14px); text-align: start; vertical-align: top; overflow-wrap: anywhere; }
+.lp-case-table thead { background: var(--surface); color: var(--text); }
+.lp-case-table thead th:first-child { width: 25%; }
+.lp-case-table thead th:nth-child(2) { width: 15%; }
+.lp-case-table thead th:nth-child(n+4) { width: 12%; }
+.lp-case-table th { font-weight: 500; }
+.lp-case-tutorial { display: flex; align-items: baseline; gap: 6px; }
+.lp-case-source { display: inline-flex; flex: 0 0 24px; height: 24px; align-items: center; justify-content: center; align-self: flex-start; color: var(--text-3); }
+.lp-case-source:hover { color: var(--text); }
+.lp-case-note, .lp-case-mobile-label { display: block; color: var(--text-3); font-size: 12px; font-weight: 400; }
+.lp-case-note { margin-top: 3px; }
+.lp-case-mobile-label { display: none; }
+.lp-case-detail { display: grid; gap: 6px; justify-items: start; margin-top: 22px; padding: 16px 18px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.lp-case-detail h3 { font-size: 15px; }
+.lp-case-setup { max-width: 78ch; margin-block: 3px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-code); font-size: 12px; overflow-wrap: anywhere; }
+
 /* recent checks */
 .lp-recent { margin-top: 48px; padding-bottom: 8px; scroll-margin-top: 24px; }
 .lp-recent h2 { color: var(--text); font-size: 15px; font-weight: 590; letter-spacing: -.01em; margin-bottom: 12px; }
@@ -176,6 +210,18 @@
   .lp-actions .lp-btn { flex: 1; }
   .lp-url input { font-size: 16px; }
   .lp-paste { font-size: 16px; }
+}
+
+@media (width < 640px) {
+  .lp-case-stats ul { grid-template-columns: minmax(0, 1fr); }
+  .lp-case-stats li { padding: 12px 0; }
+  .lp-case-stats li + li { border-inline-start: 0; border-top: 1px solid var(--border); }
+  .lp-case-table, .lp-case-table tbody { display: grid; gap: 10px; }
+  .lp-case-table thead { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .lp-case-table tbody tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 12px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+  .lp-case-table tbody :is(th, td) { padding: 0; border: 0; }
+  .lp-case-table tbody :is(th, td:nth-child(-n+3)) { grid-column: 1 / -1; }
+  .lp-case-mobile-label { display: block; }
 }
 
 @media (prefers-reduced-motion: reduce) {

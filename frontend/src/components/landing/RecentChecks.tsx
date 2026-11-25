@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import { TriangleAlert, X } from 'lucide-react'
 import { Link } from 'react-router'
 import { loadRecentChecks } from '@/api/checkSource'
+import type { RecentCheck } from '@/api/checkSource'
 import type { CheckReport } from '@/api/types'
 
-type State = { status: 'loading' } | { status: 'error' } | { status: 'ready'; checks: CheckReport[] }
+type State = { status: 'loading' } | { status: 'error' } | { status: 'ready'; checks: RecentCheck[] }
 
 function sourceHost(check: CheckReport): string {
   if (check.source_kind === 'notebook') return 'uploaded notebook'
@@ -77,7 +78,7 @@ export function RecentChecks() {
             <li key={check.id}>
               <Link to={`/checks/${check.id}`}>
                 <div className="lp-rmain">
-                  <span className="lp-rtitle">{check.title || sourceHost(check)}</span>
+                  <span className="lp-rtitle">{check.showcase_label?.trim() || check.title || 'Untitled tutorial'}</span>
                   <span className="lp-rhost">{sourceHost(check)}</span>
                 </div>
                 <Counts check={check} />

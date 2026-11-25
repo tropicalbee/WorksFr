@@ -1,8 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router'
 import { SiteHeader } from '@/components/SiteHeader'
 import { focusCheckInput } from '@/components/checkInput'
 import { BentoCard } from '@/components/landing/BentoCard'
+import { CaseStudies } from '@/components/landing/CaseStudies.tsx'
+import { CaseStudyStats } from '@/components/landing/CaseStudyStats'
 import { CheckForm } from '@/components/landing/CheckForm'
 import { FixDiffVisual } from '@/components/landing/FixDiffVisual'
 import { HeroHeadline } from '@/components/landing/HeroHeadline'
@@ -12,6 +14,8 @@ import { RecentChecks } from '@/components/landing/RecentChecks'
 import { RunLogVisual } from '@/components/landing/RunLogVisual'
 import { VersionDriftVisual } from '@/components/landing/VersionDriftVisual'
 import { VideoFrameVisual } from '@/components/landing/VideoFrameVisual'
+import { loadCaseStudies } from '@/components/landing/caseStudies'
+import type { CaseStudyData } from '@/components/landing/caseStudies'
 import { DotPattern } from '@/components/ui/dot-pattern'
 import { GridPattern } from '@/components/ui/grid-pattern'
 import { ShineBorder } from '@/components/ui/shine-border'
@@ -27,10 +31,20 @@ const HEADLINE_TAILS = [
 
 export default function HomePage() {
   const { hash, state, key } = useLocation()
+  const [caseStudies, setCaseStudies] = useState<CaseStudyData | null>(null)
+  const scrollTarget = hash === '#case-studies' && !caseStudies ? '' : hash
 
   useEffect(() => {
-    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView()
-  }, [hash])
+    const controller = new AbortController()
+    void loadCaseStudies(controller.signal).then(data => {
+      if (!controller.signal.aborted) setCaseStudies(data)
+    }).catch(() => { /* The case studies are optional on the landing page. */ })
+    return () => controller.abort()
+  }, [])
+
+  useEffect(() => {
+    if (scrollTarget) document.getElementById(scrollTarget.slice(1))?.scrollIntoView()
+  }, [scrollTarget])
 
   useEffect(() => {
     if ((state as { focusCheck?: boolean } | null)?.focusCheck) focusCheckInput()
@@ -45,14 +59,15 @@ export default function HomePage() {
           <p className="lp-eyebrow">Tutorial check</p>
           <HeroHeadline lead={HEADLINE_LEAD} tails={HEADLINE_TAILS} />
           <p className="lp-sub">
-            Paste a link or upload a notebook. WorksFr runs each step in a sandbox with today's library versions and shows a verified fix for every line that broke.
+            Paste a link or upload a notebook. WorksFr runs each step in a sandbox with today's library versions and shows a replacement for each broken line, once that replacement has run without an error.
           </p>
           <CheckForm />
+          {caseStudies && <CaseStudyStats data={caseStudies} />}
         </div>
         <div className="lp-bento" id="how">
           <BentoCard
             className="lp-wide"
-            title="A broken line gets a verified fix"
+            title="A broken line gets a fix that runs clean"
             text="The old call is struck out and the replacement sits under it, but only after it has run."
             border={<ShineBorder />}
           >
@@ -90,6 +105,7 @@ export default function HomePage() {
             <RealRunVisual />
           </BentoCard>
         </div>
+        {caseStudies && <CaseStudies data={caseStudies} />}
         <RecentChecks />
       </main>
       <LandingFooter />
