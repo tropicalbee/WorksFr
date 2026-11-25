@@ -7,7 +7,9 @@
 .lp-hl { display: grid; }
 .lp-hl > span { grid-area: 1 / 1; }
 .lp-hl-size { visibility: hidden; }
-.lp-caret { display: inline-block; width: 2px; height: .9em; margin: 0 -2px 0 0; vertical-align: -.08em; background: var(--text-2); animation: lp-blink 1s steps(1) infinite; }
+.lp-hl-typed { margin-inline-end: -0.25em; }
+.lp-caret { display: inline; position: relative; }
+.lp-caret::after { content: ''; position: absolute; left: -1px; top: .12em; width: 2px; height: .9em; background: var(--text-2); animation: lp-blink 1s steps(1) infinite; }
 
 .lp-check { margin-top: 30px; display: flex; flex-direction: column; gap: 10px; max-width: 760px; }
 .lp-url { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 14px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface-code); color: var(--text-3); }
@@ -164,6 +166,7 @@
 .lp-evidence-section { margin-top: 88px; scroll-margin-top: 86px; line-height: 1.55; }
 .lp-evidence-section h2 { margin-bottom: 16px; color: var(--text); font-size: 24px; font-weight: 600; letter-spacing: -.01em; }
 .lp-case-lede { max-width: 72ch; color: var(--text-3); font-size: 14.5px; text-wrap: pretty; }
+.lp-case-reach-note { margin-top: 8px; max-width: 78ch; color: var(--text-3); font-size: 12px; }
 .lp-case-link, .lp-recent-more span { color: var(--text); text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
 .lp-case-link:hover, .lp-recent-more:hover span { text-decoration-color: var(--text-3); }
 .lp-results-table { width: 100%; table-layout: fixed; }
@@ -221,7 +224,7 @@
 .lp-recent-time-column { width: 88px; }
 .lp-recent-row { position: relative; }
 .lp-recent-link::after { position: absolute; inset: 0; content: ''; }
-.lp-recent-row .lp-result-note { position: relative; }
+.lp-recent-row .lp-result-note { position: relative; white-space: nowrap; }
 .lp-recent-row:hover .lp-recent-link, .lp-recent-link:focus-visible { text-decoration: underline; text-decoration-color: var(--text-3); text-underline-offset: 3px; }
 .lp-recent-table tbody .lp-recent-when { color: var(--text-3); font-size: 12px; }
 .lp-recent-more { display: inline-flex; align-items: center; gap: 6px; margin-top: 16px; color: var(--text); cursor: pointer; font-size: 13.5px; }
@@ -262,7 +265,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .lp-card *, .lp-card *::before, .lp-card *::after, .lp-caret { animation: none; }
+  .lp-card *, .lp-card *::before, .lp-card *::after, .lp-caret::after { animation: none; }
   .lp-spinner { display: none; }
 }
 

@@ -307,5 +307,6 @@
       "label": "Claude Code via MCP",
       "kind": "Agent"
     }
-  ]
+  ],
+  "reach_note": "Reach is the number each page shows publicly: views, reads, likes or the repository's stars. Each site counts differently, so the numbers only compare within a site. \"none shown\" means the page shows no count."
 }

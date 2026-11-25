@@ -118,6 +118,7 @@ export function CaseStudies({ data }: { data: CaseStudyData }) {
           {data.tutorials.map(tutorial => <TutorialRow key={tutorial.check_id} tutorial={tutorial} />)}
         </tbody>
       </table>
+      {data.reach_note && <p className="lp-case-reach-note">{data.reach_note}</p>}
       <div className="lp-case-experiments">
         <div>
           <h3>AI-written code</h3>

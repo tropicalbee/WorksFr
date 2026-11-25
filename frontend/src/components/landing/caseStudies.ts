@@ -22,6 +22,7 @@ export type TutorialCaseStudy = {
 export type CaseStudyData = {
   run_date: string
   selection?: string
+  reach_note?: string
   featured_examples?: FeaturedExample[]
   versions: { pandas: string }
   tutorials: TutorialCaseStudy[]
