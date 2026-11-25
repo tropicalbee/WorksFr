@@ -9,12 +9,14 @@ export type TutorialCaseStudy = {
   broken: number
   fixed: number
   fixed_unverified: number
+  unverified_reason?: string | null
   cant_verify: number
   hit_time_limit: boolean
 }
 
 export type CaseStudyData = {
   run_date: string
+  selection?: string
   versions: { pandas: string }
   tutorials: TutorialCaseStudy[]
   tutorial_totals: { count: number; sites: number; languages: number; library_breaks: number; fixed_steps: number }
@@ -36,6 +38,7 @@ export type CaseStudyData = {
     seconds: number
     result: string
     without_setup_line: string
+    replacement_check_ids?: [first: string, second: string]
   }
 }
 
@@ -48,6 +51,10 @@ export function formatCaseStudyStats(
     stepsFixed: String(tutorials.fixed_steps),
     snippetsUsingRemovedApis: `${agent.broke + agent.hidden_removed_api} of ${agent.snippets}`,
   }
+}
+
+export function formatUnverifiedNote(count: number, reason?: string | null): string {
+  return reason ? `+${count} got further, ${reason} unverified` : `+${count} unverified`
 }
 
 export async function loadCaseStudies(signal: AbortSignal): Promise<CaseStudyData> {

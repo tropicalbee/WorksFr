@@ -80,7 +80,7 @@
       "cause": "A page error (undefined Index); later steps need a CSV the page doesn't include",
       "library_break": false,
       "hit_time_limit": false,
-      "unverified_reason": "later steps need a data file"
+      "unverified_reason": "data-file step"
     },
     {
       "check_id": "d1bf5ddd918c42139d9d5abbe0ebf88b",

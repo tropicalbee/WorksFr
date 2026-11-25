@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatCaseStudyStats } from './caseStudies'
+import { formatCaseStudyStats, formatUnverifiedNote } from './caseStudies'
 
 describe('formatCaseStudyStats', () => {
   it('formats the three headlines and includes removed APIs hidden by a fallback', () => {
@@ -22,5 +22,16 @@ describe('formatCaseStudyStats', () => {
       stepsFixed: '0',
       snippetsUsingRemovedApis: '0 of 4',
     })
+  })
+})
+
+describe('formatUnverifiedNote', () => {
+  it('describes what remains unverified when a reason is available', () => {
+    expect(formatUnverifiedNote(1, 'live API call')).toBe('+1 got further, live API call unverified')
+  })
+
+  it('shows the count alone when there is no reason', () => {
+    expect(formatUnverifiedNote(2, null)).toBe('+2 unverified')
+    expect(formatUnverifiedNote(2)).toBe('+2 unverified')
   })
 })

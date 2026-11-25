@@ -13,7 +13,7 @@ export function CaseStudyStats({ data }: { data: CaseStudyData }) {
       <ul aria-label="Case study highlights">
         <li>
           <strong className="lp-case-broken">{tutorialsBroken}</strong>
-          <span>tutorials we checked broke on today's libraries</span>
+          <span>hand-picked tutorials broke on today's libraries</span>
         </li>
         <li>
           <strong className="lp-case-fixed">{stepsFixed}</strong>
@@ -21,7 +21,7 @@ export function CaseStudyStats({ data }: { data: CaseStudyData }) {
         </li>
         <li>
           <strong className="lp-case-broken">{snippetsUsingRemovedApis}</strong>
-          <span>AI-written snippets used an API that's gone</span>
+          <span>AI-written snippets about changed APIs used one that's gone</span>
         </li>
       </ul>
       <p className="lp-muted">
