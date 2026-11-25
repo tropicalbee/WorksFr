@@ -15,6 +15,7 @@ from app.config import get_settings
 
 POLL_SECONDS = 2
 GRACE_SECONDS = 60
+MAX_OUTPUT_CHARS = 2000
 
 _sleep = asyncio.sleep
 _transport: httpx.AsyncBaseTransport | None = None
@@ -26,8 +27,11 @@ LABEL_HELP = (
     "fixed = the replacement code ran in the sandbox with no error; fixed_unverified = it got "
     "past the broken API but stopped later only because the sandbox lacks a key, network or "
     "data; failed = no working fix found. A fix counts only because it ran in the sandbox, "
-    "never because a model said so. There is no score or grade. "
-    "Ran in the sandbox. Read it before you run it on your machine."
+    "never because a model said so. output = what the step printed in the sandbox (stdout, "
+    "then stderr), from the replacement when there is one, cut at 2,000 characters. "
+    "There is no score or grade. "
+    "Ran in the sandbox without an error. Its output wasn't compared with the tutorial's, "
+    "so read it before you run it."
 )
 
 mcp = MCPServer(
@@ -78,6 +82,11 @@ def _summarize(report: dict[str, Any]) -> dict[str, Any]:
             "reason": step.get("reason", ""),
             "verdict": step.get("verdict"),
         }
+        output = step.get("output")
+        if output:
+            if len(output) > MAX_OUTPUT_CHARS:
+                output = output[:MAX_OUTPUT_CHARS] + "\n... (output truncated)"
+            row["output"] = output
         if step.get("verdict") in ("fixed", "fixed_unverified"):
             row["replacement"] = step["final_code"]
             if step.get("explanation"):

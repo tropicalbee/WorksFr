@@ -93,6 +93,33 @@ def test_summary_has_fixed_code_and_no_score(monkeypatch):
     assert broken["reason"] == "DataFrame.append was removed."
 
 
+def _summary_with_output(monkeypatch, output):
+    step = {**REPORT_DONE["steps"][0]}
+    if output is not None:
+        step["output"] = output
+    report = {**REPORT_DONE, "steps": [step]}
+    use_backend(monkeypatch, lambda request: httpx.Response(200, json=report))
+    return run(mcp_server.get_report("abc"))["steps"][0]
+
+
+def test_step_output_included_when_present(monkeypatch):
+    row = _summary_with_output(monkeypatch, "RMSE: 3.14\n")
+    assert row["output"] == "RMSE: 3.14\n"
+
+
+def test_step_output_omitted_when_empty(monkeypatch):
+    assert "output" not in _summary_with_output(monkeypatch, "")
+    assert "output" not in _summary_with_output(monkeypatch, None)
+
+
+def test_step_output_truncated_past_cap(monkeypatch):
+    cap = mcp_server.MAX_OUTPUT_CHARS
+    row = _summary_with_output(monkeypatch, "x" * (cap + 500))
+    assert row["output"] == "x" * cap + "\n... (output truncated)"
+    exact = _summary_with_output(monkeypatch, "y" * cap)
+    assert exact["output"] == "y" * cap
+
+
 def test_failed_check_returns_message(monkeypatch):
     failed = {**REPORT_DONE, "status": "failed", "error": "Page could not be fetched", "steps": []}
     use_backend(monkeypatch, lambda request: httpx.Response(200, json=failed))
@@ -164,7 +191,10 @@ def test_tools_are_registered():
 
 def test_replacement_tool_descriptions_include_sandbox_note() -> None:
     descriptions = {tool.name: tool.description for tool in run(mcp_server.mcp.list_tools())}
-    note = "Ran in the sandbox. Read it before you run it on your machine."
+    note = (
+        "Ran in the sandbox without an error. Its output wasn't compared with the tutorial's, "
+        "so read it before you run it."
+    )
     for name in ("check_tutorial", "check_code", "get_report"):
         assert note in descriptions[name]
 
