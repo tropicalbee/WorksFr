@@ -56,7 +56,7 @@ export function StepEntry({ step, block, running = false, source = '' }: StepEnt
       <div className={`step-card${!step && !running ? ' waiting' : ''}`}>
         <CodeBlock
           code={step?.original_code ?? block.code}
-          python={block.kind === 'python' || block.kind === 'repl'}
+          kind={block.kind}
           quiet={!step && !running}
         />
         {step?.label === 'deprecated' && step.warnings?.map((warning, i) => (
@@ -85,7 +85,7 @@ export function StepEntry({ step, block, running = false, source = '' }: StepEnt
                       : attempt.verdict === 'fixed_unverified' ? 'Live call unverified' : 'Failed'}
                   </span>
                 </h4>
-                <CodeBlock code={attempt.patched_code} />
+                <CodeBlock code={attempt.patched_code} kind={block.kind} />
                 {attempt.result?.error && (
                   <p className="diagnostic">
                     {attempt.result.error.type}: {attempt.result.error.message}
