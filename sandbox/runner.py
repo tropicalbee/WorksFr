@@ -42,6 +42,11 @@ NODE_DEPRECATION = re.compile(r"^\(node:\d+\) \[DEP\d+\] DeprecationWarning: (.*
 TSX_REDECLARATION = re.compile(
     r'^.*\.[cm]ts:\d+:\d+: ERROR: The symbol ".*" has already been declared$', re.MULTILINE
 )
+NODE_TOP_LEVEL_AWAIT = re.compile(
+    r"await is only valid in async functions and the top level bodies of modules"
+    r'|Top-level await is currently not supported with the "cjs" output format'
+)
+COMPILED_RESULT = "compiled"
 C_MAIN = re.compile(r"\bmain\s*\([^();{}]*\)\s*(?:->\s*int\s*)?\{")
 C_PREAMBLE = re.compile(r"^\s*#\s*(?:include|define)\b")
 COMPILER_ERROR = re.compile(r"^(?:.*?: )?(?:fatal )?error:.*$", re.MULTILINE)
@@ -100,8 +105,8 @@ def mask_comments_and_strings(code: str) -> str:
     return SOURCE_TOKENS.sub(mask, code)
 
 
-def node_extension(code: str, typescript: bool) -> str:
-    module = JS_MODULE_DECLARATION.search(mask_comments_and_strings(code))
+def node_extension(code: str, typescript: bool, *, as_module: bool = False) -> str:
+    module = as_module or JS_MODULE_DECLARATION.search(mask_comments_and_strings(code))
     if typescript:
         return ".mts" if module else ".cts"
     return ".mjs" if module else ".cjs"
@@ -127,6 +132,12 @@ def node_redeclaration(error: dict[str, str]) -> bool:
         and message.startswith("Transform failed with ")
         and TSX_REDECLARATION.search(error["traceback"]) is not None
     )
+
+
+def node_top_level_await(error: dict[str, str]) -> bool:
+    # Node reports a SyntaxError. tsx reports an esbuild transform failure with the detail
+    # in the traceback.
+    return NODE_TOP_LEVEL_AWAIT.search(f"{error['message']}\n{error['traceback']}") is not None
 
 
 def deprecation(message: str, filename: str, lineno: int | None) -> dict[str, Any]:
@@ -391,6 +402,10 @@ def execute(request: dict[str, Any], namespace: dict[str, Any], capture: Capture
     }
 
 
+# stdout, stderr, warnings, error, result
+ChildOutcome = tuple[str, str, list[dict[str, Any]], dict[str, str] | None, str | None]
+
+
 class ChildExecutor:
     def __init__(self, workdir: Path, capture: Capture) -> None:
         self.workdir = workdir
@@ -403,29 +418,37 @@ class ChildExecutor:
         filename = f"<step-{request.get('id')}>"
         code = request["code"]
         if lang in self.native_history:
-            stdout, stderr, records, error = self.run_native(
+            stdout, stderr, records, error, result = self.run_native(
                 code, lang, filename, self.native_history[lang]
             )
         else:
-            stdout, stderr, records, error = self.run_node(code, lang, filename, self.node_history)
+            stdout, stderr, records, error, result = self.run_node(
+                code, lang, filename, self.node_history
+            )
         return {
             "id": request.get("id"),
             "status": "error" if error else "ok",
             "stdout": stdout,
             "stderr": stderr,
-            "result": None,
+            "result": result,
             "warnings": records,
             "error": error,
             "duration_ms": round((time.monotonic() - started) * 1000),
         }
 
     def run_node(
-        self, code: str, lang: str, filename: str, history: list[tuple[str, str]]
-    ) -> tuple[str, str, list[dict[str, Any]], dict[str, str] | None]:
+        self,
+        code: str,
+        lang: str,
+        filename: str,
+        history: list[tuple[str, str]],
+        *,
+        as_module: bool = False,
+    ) -> ChildOutcome:
         prefix = "".join(f"{previous}\n;\n" for _, previous in history)
         current_start = prefix.count("\n") + 2
         typescript = lang == "typescript" or any(kind == "typescript" for kind, _ in history)
-        source = self.source_path(node_extension(prefix + code, typescript))
+        source = self.source_path(node_extension(prefix + code, typescript, as_module=as_module))
         marker = f"worksfr-{uuid.uuid4().hex}\n"
         marker_literal = json.dumps(marker)
         boundary = (
@@ -445,25 +468,39 @@ class ChildExecutor:
         if returncode:
             _, full_stderr = self.capture.read()
             error = node_error(stderr, returncode, full_stderr)
-            if history and not marked and node_redeclaration(error):
-                isolated_history: list[tuple[str, str]] = []
-                result = self.run_node(code, lang, filename, isolated_history)
-                if isolated_history:
-                    history[:] = isolated_history
-                return result
+            if not marked:
+                # A CommonJS file cannot hold top-level await, so try this step once as a module.
+                if not as_module and node_top_level_await(error):
+                    return self.run_node(code, lang, filename, history, as_module=True)
+                # The replayed history exited the process or redeclared a name. Run this step alone.
+                if history and (
+                    node_redeclaration(error) or (error["type"] == "ExitStatus" and returncode > 0)
+                ):
+                    return self.run_node_alone(code, lang, filename, history)
         elif marked:
             history.append((lang, code))
         else:
+            if history:
+                return self.run_node_alone(code, lang, filename, history)
             error = {
                 "type": "ExitStatus",
                 "message": "Node exited before the current step ran",
                 "traceback": stderr,
             }
-        return stdout, stderr, records, error
+        return stdout, stderr, records, error, None
+
+    def run_node_alone(
+        self, code: str, lang: str, filename: str, history: list[tuple[str, str]]
+    ) -> ChildOutcome:
+        isolated_history: list[tuple[str, str]] = []
+        outcome = self.run_node(code, lang, filename, isolated_history)
+        if isolated_history:
+            history[:] = isolated_history
+        return outcome
 
     def run_native(
         self, code: str, lang: str, filename: str, history: list[tuple[str, bool]]
-    ) -> tuple[str, str, list[dict[str, Any]], dict[str, str] | None]:
+    ) -> ChildOutcome:
         compiler, standard, suffix = (
             ("gcc", "-std=c17", ".c") if lang == "c" else ("g++", "-std=c++20", ".cpp")
         )
@@ -505,16 +542,17 @@ class ChildExecutor:
             return result
         records = compiler_warnings(stderr, source.name, filename)
         if returncode:
-            return stdout, stderr, records, compiler_error(stderr, returncode)
+            return stdout, stderr, records, compiler_error(stderr, returncode), None
         if has_main:
             returncode = self.capture.run_child([str(target)], self.workdir)
             run_stdout, run_stderr = self.capture.read()
             stdout = limited_text((stdout + run_stdout).encode("utf-8"), OUTPUT_LIMIT)
             stderr = limited_text((stderr + run_stderr).encode("utf-8"), OUTPUT_LIMIT)
             if error := native_run_error(returncode, stderr):
-                return stdout, stderr, records, error
+                return stdout, stderr, records, error, None
         history.append((current, has_main))
-        return stdout, stderr, records, None
+        # With no main() the step was only compiled. The backend labels that Can't verify.
+        return stdout, stderr, records, None, None if has_main else COMPILED_RESULT
 
     def source_path(self, suffix: str) -> Path:
         return self.workdir / f"worksfr-{uuid.uuid4().hex}{suffix}"

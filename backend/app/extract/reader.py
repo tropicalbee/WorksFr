@@ -14,10 +14,20 @@ from urllib.parse import unquote, urlsplit
 import httpx
 
 from app.config import Settings
-from app.extract.blocks import RawBlock
+from app.extract.blocks import (
+    OUTPUT_HINTS,
+    SHELL_HINTS,
+    RawBlock,
+    classify,
+    is_display_only,
+    looks_like_shell,
+    normalize_text,
+    parse_python,
+)
 from app.extract.errors import ExtractionError
 from app.extract.fetch import check_url
 from app.extract.markdown_doc import parse_markdown
+from app.models import StepKind
 
 READER_TIMEOUT_SECONDS = 60
 LOGIN_MESSAGE = (
@@ -120,10 +130,24 @@ def _login_page(reply: _Reply) -> bool:
     return "password" in reply.markdown.lower() and bool(_LOGIN_WORDS.search(reply.markdown))
 
 
+def _can_merge_fence(text: str, hint: str | None) -> bool:
+    text = normalize_text(text)
+    if hint in SHELL_HINTS or hint in OUTPUT_HINTS:
+        return False
+    if text.startswith("Traceback (most recent call last)"):
+        return False
+    if looks_like_shell(text) and classify(text, hint).kind == StepKind.SHELL:
+        return False
+    # Incomplete fragments can become valid when joined, so require positive evidence of output.
+    tree = parse_python(text)
+    return tree is None or not is_display_only(tree)
+
+
 def _clean_blocks(blocks: list[RawBlock]) -> list[RawBlock]:
     invisible = str.maketrans("", "", "\u200b\u200c\u200d\u2060\ufeff")
     cleaned: list[RawBlock] = []
     pending_context: list[str] = []
+    prior_mergeable = False
     for block in blocks:
         if block.context:
             pending_context.append(block.context)
@@ -133,11 +157,13 @@ def _clean_blocks(blocks: list[RawBlock]) -> list[RawBlock]:
         block.context = "\n".join(pending_context)
         pending_context.clear()
         text = "\n".join(line if line.strip() else "" for line in text.split("\n"))
-        if cleaned and not block.context and cleaned[-1].hint == block.hint:
+        mergeable = _can_merge_fence(text, block.hint)
+        if prior_mergeable and mergeable and not block.context and cleaned[-1].hint == block.hint:
             cleaned[-1].text += "\n" + text
         else:
             block.text = text
             cleaned.append(block)
+        prior_mergeable = mergeable
     return cleaned
 
 

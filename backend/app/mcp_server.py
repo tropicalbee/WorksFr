@@ -26,7 +26,8 @@ LABEL_HELP = (
     "fixed = the replacement code ran in the sandbox with no error; fixed_unverified = it got "
     "past the broken API but stopped later only because the sandbox lacks a key, network or "
     "data; failed = no working fix found. A fix counts only because it ran in the sandbox, "
-    "never because a model said so. There is no score or grade."
+    "never because a model said so. There is no score or grade. "
+    "Ran in the sandbox. Read it before you run it on your machine."
 )
 
 mcp = MCPServer(

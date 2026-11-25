@@ -34,6 +34,7 @@ LANGUAGE_KINDS: dict[str, StepKind] = {
 One table for every extractor. Python and shell names stay in the hint sets below."""
 
 PYTHON_HINTS = {"python", "python3", "py", "py3", "python2", "ipython", "jupyter", "pyi"}
+JSX_HINTS = {"jsx", "tsx"}
 REPL_HINTS = {"pycon", "python-repl", "pycon3", "repl", "doctest"}
 SHELL_HINTS = {
     "bash", "sh", "shell", "zsh", "console", "terminal", "shell-session", "shellsession",
@@ -55,7 +56,8 @@ _SHELL_COMMANDS = (
 )
 _SHELL_LINE = re.compile(rf"^(?:\$\s+)?(?:{_SHELL_COMMANDS})(?:\s+[^=(\s]|$)")
 _PYTHONISH = re.compile(
-    r"^\s*(?:import\s+\w|from\s+[\w.]+\s+import\s|def\s+\w|class\s+\w|print\s*\(|@\w|"
+    r"^[ \t]*(?:import\s+\w[^;\n]*$|from\s+[\w.]+\s+import\s|def\s+\w|"
+    r"class\s+\w[^\n{]*$|print(?:\s*\(|[ \t]+[^=\s])|@\w|"
     r"(?:for|while|if|with)\s.+:\s*$|try:\s*$)",
     re.M,
 )
@@ -69,10 +71,20 @@ _CPP_MARKERS = re.compile(
 _JS_MARKERS = re.compile(
     r"\brequire\s*\(|^[ \t]*import\b[^\n]*?\bfrom\s*['\"]|^[ \t]*import\s*['\"]"
     r"|\bconsole\.\w+\s*\(|\bmodule\.exports\b"
-    r"|^[ \t]*export\s+(?:default|const|function|async)\b|\bfunction\s*\w*\s*\(",
+    r"|^[ \t]*export\s+(?:default|const|function|async)\b|\bfunction\s*\w*\s*\("
+    r"|^(?:const|let|var)[ \t]+[\w$]+[ \t]*=",
     re.M,
 )
 _JS_BINDING = re.compile(r"\b(?:const|let)\b")
+C_LIKE_COMMENTS_AND_STRINGS = re.compile(
+    r"//[^\n]*|/\*[\s\S]*?\*/"
+    r"""|"(?:\\[\s\S]|[^"\\\n])*"|'(?:\\[\s\S]|[^'\\\n])*'|`(?:\\[\s\S]|[^`\\])*`"""
+)
+_JSX_TAG_NAME = r"[A-Za-z_$][\w$.:-]*"
+_JSX_TOKEN = re.compile(
+    rf"{C_LIKE_COMMENTS_AND_STRINGS.pattern}|(?P<jsx>"
+    rf"</(?:{_JSX_TAG_NAME})?\s*>|<{_JSX_TAG_NAME}(?:\s[^<]*?)?/\s*>)"
+)
 _JSON_NAMES = {"true", "false", "null", "nan", "inf", "infinity"}
 _MAX_TAIL_SCAN_LINES = 300
 
@@ -110,7 +122,13 @@ def parse_python(code: str) -> ast.Module | None:
 
 
 def has_js_markers(text: str) -> bool:
+    text = textwrap.dedent(text)
     return bool(_JS_MARKERS.search(text)) or ("=>" in text and bool(_JS_BINDING.search(text)))
+
+
+def has_jsx_tags(text: str) -> bool:
+    """Identify closing or self-closing JSX syntax outside strings and comments."""
+    return any(match.lastgroup == "jsx" for match in _JSX_TOKEN.finditer(text))
 
 
 def looks_pythonish(text: str) -> bool:
@@ -203,7 +221,7 @@ def _classify_python_text(text: str, without_output: str | None) -> tuple[StepKi
         return StepKind.PYTHON, text
     if text.startswith("Traceback (most recent call last)"):
         return StepKind.OUTPUT, None
-    if has_js_markers(text):
+    if has_js_markers(text) or has_jsx_tags(text):
         return StepKind.JAVASCRIPT, text
     prefix = _code_prefix(text)
     if prefix is not None:
@@ -217,6 +235,11 @@ def _classify_python_text(text: str, without_output: str | None) -> tuple[StepKi
 def classify(text: str, hint: str | None, without_output: str | None = None) -> Block:
     """Classify normalized text. Returns a Block with idx 0; callers renumber."""
     kind, runnable = _classify(text, hint, without_output)
+    if kind in (StepKind.JAVASCRIPT, StepKind.TYPESCRIPT) and (
+        hint in JSX_HINTS or has_jsx_tags(text)
+    ):
+        # Keep a step for precheck and the report while withholding executable source.
+        runnable = ""
     return Block(idx=0, kind=kind, code=text, runnable_code=runnable)
 
 
@@ -301,6 +324,8 @@ def classify_notebook_cell(code: str, language: StepKind = StepKind.PYTHON) -> B
     text = normalize_text(code)
     if not text.strip():
         return None
+    if language in (StepKind.JAVASCRIPT, StepKind.TYPESCRIPT):
+        return classify(text, language.value)
     if language != StepKind.PYTHON:
         return Block(idx=0, kind=language, code=text, runnable_code=text)
     cell_magic = _CELL_MAGIC.match(text)

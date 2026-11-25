@@ -9,7 +9,8 @@ import ast
 import re
 from collections.abc import Collection, Mapping
 
-from app.extract.libs import npm_package_name
+from app.extract.blocks import C_LIKE_COMMENTS_AND_STRINGS, has_jsx_tags
+from app.extract.libs import C_STANDARD_HEADERS, CPP_STANDARD_HEADERS, npm_package_name
 from app.models import ErrorInfo, ExecResult, Label, LabelDecision, PatchVerdict, StepKind
 from app.packages import dist_for_import, normalize
 
@@ -21,6 +22,9 @@ REASON_GPU = "needs a GPU"
 REASON_DATA_FILE = "needs a data file that is not on the page"
 REASON_LOCAL_MODULE = "imports a local file from the author's machine"
 REASON_BROWSER = "runs in a web browser"
+REASON_JSX = "JSX needs a build step, so this step wasn't run."
+REASON_NO_MAIN = "Compiled without errors, but it has no main(), so nothing ran."
+COMPILED_RESULT = "compiled"
 CASCADE_PREFIX = "depends on step "
 
 DEPRECATION_CATEGORIES: tuple[str, ...] = (
@@ -83,14 +87,14 @@ _NODE_NETWORK_CODE = r"(?:ENOTFOUND|ECONNREFUSED|EAI_AGAIN)"
 _NODE_NETWORK = re.compile(rf"\b(?:{_NODE_NETWORK_CODE}|fetch failed)\b", re.IGNORECASE)
 _NODE_NETWORK_CAUSE = re.compile(rf"^\s+code: ['\"]{_NODE_NETWORK_CODE}['\"]", re.M)
 
-_COMMENTS_AND_STRINGS = re.compile(
-    r"//[^\n]*|/\*[\s\S]*?\*/"
-    r"""|"(?:\\[\s\S]|[^"\\\n])*"|'(?:\\[\s\S]|[^'\\\n])*'|`(?:\\[\s\S]|[^`\\])*`"""
-)
 _SYSTEM_INCLUDE = re.compile(r"^[ \t]*#[ \t]*include[ \t]*<([^>\n]+)>", re.M)
+_QUOTED_INCLUDE = re.compile(r'^[ \t]*#[ \t]*include[ \t]*"([^"\n]+)"', re.M)
 _C_KEYBOARD = re.compile(
-    r"\b(?:(?:scanf|getchar|gets)\s*\(|cin\s*>>"
-    r"|fgets\s*\((?:[^();]|\([^()]*\))*?,\s*stdin\s*\))"
+    r"\b(?:(?:v?scanf(?:_s)?|getchar(?:_unlocked)?|gets(?:_s)?)\s*\("
+    r"|(?:fscanf|vfscanf|fgetc|getc|ungetc)\s*\(\s*stdin\b"
+    r"|(?:fgets|fread|getline|getdelim)\s*\((?:[^();]|\([^()]*\))*?,\s*stdin\s*\)"
+    r"|cin\s*(?:>>|\.\s*(?:get|getline|read|readsome|ignore|peek)\s*\()"
+    r"|getline\s*\(\s*(?:std\s*::\s*)?cin\b)"
 )
 _READLINE_SPECIFIER = r"""(['"])(?:node:)?readline(?:/promises)?\1"""
 _JS_KEYBOARD = re.compile(
@@ -153,6 +157,8 @@ def label_step(
         return LabelDecision(label=Label.CANT_VERIFY, reason=REASON_TIMEOUT)
 
     if result.status == "ok":
+        if kind in (StepKind.C, StepKind.CPP) and result.result == COMPILED_RESULT:
+            return LabelDecision(label=Label.CANT_VERIFY, reason=REASON_NO_MAIN)
         categories = sorted(
             {w.category for w in result.warnings if w.category in DEPRECATION_CATEGORIES}
         )
@@ -230,16 +236,18 @@ def _precheck_call(node: ast.Call) -> LabelDecision | None:
     return None
 
 
-def _input_scan_code(code: str, *, keep_readline: bool = False) -> str:
+def _input_scan_code(code: str, *, keep_readline: bool = False, keep_strings: bool = False) -> str:
     def mask(match: re.Match[str]) -> str:
         token = match.group()
+        if keep_strings and not token.startswith("/"):
+            return token
         if keep_readline and re.fullmatch(_READLINE_SPECIFIER, token):
             return token
         # Keep line boundaries and leave a placeholder where a string was an argument.
         replacement = " " if token.startswith("/") else "_"
         return replacement + "\n" * token.count("\n")
 
-    return _COMMENTS_AND_STRINGS.sub(mask, code)
+    return C_LIKE_COMMENTS_AND_STRINGS.sub(mask, code)
 
 
 def precheck(
@@ -254,10 +262,19 @@ def precheck(
                 return LabelDecision(
                     label=Label.CANT_VERIFY, reason=f"needs the system library {header}"
                 )
+        for match in _QUOTED_INCLUDE.finditer(_input_scan_code(code, keep_strings=True)):
+            header = match.group(1).strip()
+            if header not in C_STANDARD_HEADERS and header not in CPP_STANDARD_HEADERS:
+                return LabelDecision(
+                    label=Label.CANT_VERIFY,
+                    reason=f"includes a local file, {header}, that the tutorial doesn't show",
+                )
         if _C_KEYBOARD.search(source):
             return LabelDecision(label=Label.CANT_VERIFY, reason=REASON_KEYBOARD)
         return None
     if kind in (StepKind.JAVASCRIPT, StepKind.TYPESCRIPT):
+        if not code or has_jsx_tags(code):
+            return LabelDecision(label=Label.CANT_VERIFY, reason=REASON_JSX)
         if _JS_KEYBOARD.search(_input_scan_code(code, keep_readline=True)):
             return LabelDecision(label=Label.CANT_VERIFY, reason=REASON_KEYBOARD)
         return None
@@ -315,6 +332,70 @@ def judge_patch(
     return decision, PatchVerdict.FAILED
 
 
+_IDENTIFIER = r"[A-Za-z_$][\w$]*"
+_JS_DECLARATION = re.compile(
+    rf"(?<![\w$.])(?:const|let|var|function\s*\*?|class|enum|namespace)\s+({_IDENTIFIER})"
+)
+_JS_PATTERN_DECLARATION = re.compile(r"(?<![\w$.])(?:const|let|var)\s*([{\[][^;]*?[}\]])\s*=")
+_JS_IMPORT = re.compile(r"(?<![\w$.])import\s+(?:type\s+)?([^;()]*?)\s+from\b")
+_JS_MISSING_NAME = re.compile(rf"({_IDENTIFIER}) is not defined")
+_C_KEYWORDS = frozenset(
+    "return else case goto sizeof new delete throw typedef do if while for switch".split()
+)
+_C_DECLARATION = re.compile(r"\b([A-Za-z_]\w*)\b(?:\s*[*&]+\s*|\s+)([A-Za-z_]\w*)\s*(?=[=;,\[({:])")
+_C_DEFINE = re.compile(r"^[ \t]*#[ \t]*define[ \t]+([A-Za-z_]\w*)", re.M)
+_C_MISSING_NAME = re.compile(
+    r"[\u2018'`]([A-Za-z_]\w*)[\u2019']\s+(?:undeclared|was not declared in this scope"
+    r"|does not name a type)"
+    r"|unknown type name [\u2018'`]([A-Za-z_]\w*)[\u2019']"
+)
+
+
+def _binding_names(pattern: str) -> set[str]:
+    names: set[str] = set()
+    for part in re.split(r"[,{}\[\]]", pattern):
+        words = part.split("=")[0].split(":")[-1].split()
+        if words and re.fullmatch(_IDENTIFIER, words[-1]):
+            names.add(words[-1])
+    return names
+
+
+def declared_names(code: str, kind: StepKind) -> set[str]:
+    """Names a JavaScript, TypeScript, C or C++ step introduces. A heuristic over masked code."""
+    source = _input_scan_code(code)
+    names: set[str] = set()
+    if kind in (StepKind.JAVASCRIPT, StepKind.TYPESCRIPT):
+        names.update(match.group(1) for match in _JS_DECLARATION.finditer(source))
+        for match in _JS_PATTERN_DECLARATION.finditer(source):
+            names |= _binding_names(match.group(1))
+        for match in _JS_IMPORT.finditer(source):
+            clause = re.sub(r"\*\s*as\s+", "", match.group(1))
+            names |= _binding_names(clause.replace(" as ", ":"))
+    elif kind in (StepKind.C, StepKind.CPP):
+        names.update(
+            match.group(2)
+            for match in _C_DECLARATION.finditer(source)
+            if match.group(1) not in _C_KEYWORDS
+        )
+        names.update(match.group(1) for match in _C_DEFINE.finditer(source))
+    return names
+
+
+def missing_name(error: ErrorInfo | None, kind: StepKind) -> str | None:
+    """The name a JavaScript, TypeScript, C or C++ error says is not defined, if it says so."""
+    if error is None:
+        return None
+    if kind in (StepKind.JAVASCRIPT, StepKind.TYPESCRIPT):
+        if error.type != "ReferenceError":
+            return None
+        match = _JS_MISSING_NAME.fullmatch(error.message)
+        return match.group(1) if match else None
+    if kind in (StepKind.C, StepKind.CPP) and error.type == "CompileError":
+        match = _C_MISSING_NAME.search(error.message)
+        return (match.group(1) or match.group(2)) if match else None
+    return None
+
+
 def cascade_source(error: ErrorInfo | None, unbound: Mapping[str, int]) -> int | None:
     if error is None or error.type != "NameError":
         return None
@@ -322,10 +403,17 @@ def cascade_source(error: ErrorInfo | None, unbound: Mapping[str, int]) -> int |
     return unbound.get(match.group(1)) if match else None
 
 
-def cascade_decision(source_idx: int, source_label: Label = Label.BROKEN) -> LabelDecision:
+def cascade_decision(
+    source_idx: int, source_label: Label = Label.BROKEN, *, always_unverified: bool = False
+) -> LabelDecision:
+    """Label a step that fails only because an earlier step of its language lacks a name.
+
+    Python keeps the source's label. The other languages never prove a dependent broken, since
+    the step's own code was not what failed, so they always give Can't verify.
+    """
     unverified = source_label == Label.CANT_VERIFY
     return LabelDecision(
-        label=Label.CANT_VERIFY if unverified else Label.BROKEN,
+        label=Label.CANT_VERIFY if unverified or always_unverified else Label.BROKEN,
         reason=f"{CASCADE_PREFIX}{source_idx + 1}, which "
         + ("couldn't be verified" if unverified else "is still broken"),
     )

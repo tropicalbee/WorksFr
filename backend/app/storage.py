@@ -8,6 +8,7 @@ from datetime import UTC, date, datetime
 
 from pydantic import TypeAdapter
 
+from app.events import FailedEvent
 from app.models import (
     CheckReport,
     CheckStatus,
@@ -114,6 +115,27 @@ def init_db(path: str) -> None:
             if name not in columns:
                 connection.execute(f"ALTER TABLE steps ADD COLUMN {name} {definition}")
         connection.execute("PRAGMA user_version=1")
+
+
+def mark_interrupted_checks_failed(db_path: str) -> None:
+    """Finish interrupted reports and record a terminal event for reconnecting clients."""
+    now = _now()
+    event = FailedEvent(error="The check stopped because the server restarted. Run it again.")
+    interrupted_statuses = (CheckStatus.RUNNING, "queued")
+    with _connection(db_path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute(
+            """INSERT INTO events (check_id, seq, type, payload_json, created_at)
+            SELECT checks.id,
+                (SELECT COALESCE(MAX(seq), 0) + 1 FROM events WHERE check_id=checks.id),
+                ?, ?, ?
+            FROM checks WHERE status IN (?, ?)""",
+            (event.type, event.model_dump_json(), now, *interrupted_statuses),
+        )
+        connection.execute(
+            "UPDATE checks SET status=?, error=?, finished_at=? WHERE status IN (?, ?)",
+            (CheckStatus.FAILED, event.error, now, *interrupted_statuses),
+        )
 
 
 def _save_step(connection: sqlite3.Connection, check_id: str, step: StepReport) -> None:

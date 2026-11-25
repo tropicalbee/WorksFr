@@ -9,8 +9,10 @@ from app.config import Settings
 from app.labels import (
     cascade_decision,
     cascade_source,
+    declared_names,
     judge_patch,
     label_step,
+    missing_name,
     precheck,
 )
 from app.models import (
@@ -48,6 +50,7 @@ class CheckSession:
         self._deadline: float | None = None
         self._ledger: list[tuple[int, StepKind, str]] = []
         self._unbound: dict[str, int] = {}
+        self._other_unbound: dict[tuple[StepKind, str], int] = {}
         self._unverified_sources: set[int] = set()
         self._probe_id = 0
         self._closed = False
@@ -95,13 +98,49 @@ class CheckSession:
         if result.error is not None and result.error.type == "ProtocolError":
             raise SandboxError("Runner protocol error")
 
-    def _record_unbound(self, step: Step, decision: LabelDecision) -> None:
-        if not step.is_python or decision.label not in (Label.BROKEN, Label.CANT_VERIFY):
+    def _record_unbound(
+        self, step: Step, decision: LabelDecision, result: ExecResult | None = None
+    ) -> None:
+        if not step.is_python:
+            self._record_other_unbound(step, decision, result)
+            return
+        if decision.label not in (Label.BROKEN, Label.CANT_VERIFY):
             return
         for name in step.bound_names():
             self._unbound.setdefault(name, step.idx)
         if decision.label == Label.CANT_VERIFY:
             self._unverified_sources.add(step.idx)
+
+    def _record_other_unbound(
+        self, step: Step, decision: LabelDecision, result: ExecResult | None
+    ) -> None:
+        kind = step.block.kind
+        names = declared_names(step.executed_code or "", kind)
+        if result is not None and result.status == "ok":
+            # The code ran or compiled, so its names exist again for later steps.
+            for name in names:
+                self._other_unbound.pop((kind, name), None)
+            return
+        if decision.label not in (Label.BROKEN, Label.CANT_VERIFY):
+            return
+        for name in names:
+            self._other_unbound.setdefault((kind, name), step.idx)
+        if decision.label == Label.CANT_VERIFY:
+            self._unverified_sources.add(step.idx)
+
+    def _cascade(self, step: Step, result: ExecResult) -> LabelDecision | None:
+        if step.is_python:
+            source = cascade_source(result.error, self._unbound)
+        else:
+            name = missing_name(result.error, step.block.kind)
+            source = self._other_unbound.get((step.block.kind, name)) if name else None
+        if source is None:
+            return None
+        return cascade_decision(
+            source,
+            Label.CANT_VERIFY if source in self._unverified_sources else Label.BROKEN,
+            always_unverified=not step.is_python,
+        )
 
     def run(self, step: Step) -> LabelDecision:
         self._check_deadline()
@@ -127,25 +166,18 @@ class CheckSession:
             return decision
         self._check_deadline()
         self._check_protocol(result)
-        source = cascade_source(result.error, self._unbound) if step.is_python else None
-        decision = (
-            cascade_decision(
-                source, Label.CANT_VERIFY if source in self._unverified_sources else Label.BROKEN
-            )
-            if source is not None
-            else label_step(
-                result,
-                kind=kind,
-                failed_packages=self.environment.failed_packages,
-                guessed_packages=self._guessed_packages,
-                failed_npm_packages=self.environment.failed_npm_packages,
-            )
+        decision = self._cascade(step, result) or label_step(
+            result,
+            kind=kind,
+            failed_packages=self.environment.failed_packages,
+            guessed_packages=self._guessed_packages,
+            failed_npm_packages=self.environment.failed_npm_packages,
         )
         # Python can leave bindings behind on error. The other runners keep successful code.
         if step.is_python or result.status == "ok":
             self._ledger.append((step.idx, kind, code))
         step.record_run(result, decision)
-        self._record_unbound(step, decision)
+        self._record_unbound(step, decision, result)
         return decision
 
     def try_patch(

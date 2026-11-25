@@ -6,7 +6,7 @@ from pydantic import SecretStr
 
 from app.config import Settings
 from app.extract import ExtractionError, extract_url
-from app.models import Extraction
+from app.models import Extraction, StepKind
 from app.pipeline import _redact
 
 URL = "https://example.com/post"
@@ -301,6 +301,30 @@ def test_reader_keeps_fences_with_different_hints_separate() -> None:
     assert [block.code for block in result.blocks] == ["pip install pandas", "import pandas as pd"]
 
 
+def test_reader_keeps_untyped_install_and_code_fences_separate() -> None:
+    result = _extract_firecrawl_markdown(
+        "```\npip install requests\n```\n```\nimport requests\n```\n"
+    )
+
+    assert [(block.kind, block.code) for block in result.blocks] == [
+        (StepKind.SHELL, "pip install requests"),
+        (StepKind.PYTHON, "import requests"),
+    ]
+
+
+@pytest.mark.parametrize("output", ["2", "Traceback (most recent call last):\nValueError: bad"])
+def test_reader_keeps_untyped_output_between_code_fences_separate(output: str) -> None:
+    result = _extract_firecrawl_markdown(
+        f"```\nprint(2)\n```\n```\n{output}\n```\n```\nx = 3\n```\n"
+    )
+
+    assert [(block.kind, block.code) for block in result.blocks] == [
+        (StepKind.PYTHON, "print(2)"),
+        (StepKind.OUTPUT, output),
+        (StepKind.PYTHON, "x = 3"),
+    ]
+
+
 def test_reader_joins_untyped_fences_across_an_image_and_blank_lines() -> None:
     result = _extract_firecrawl_markdown(
         "```\nimport pandas as pd\n```\n\n"
@@ -312,6 +336,16 @@ def test_reader_joins_untyped_fences_across_an_image_and_blank_lines() -> None:
     assert [block.code for block in result.blocks] == [
         "import pandas as pd\na = pd.DataFrame()",
         "print(a)",
+    ]
+
+
+def test_reader_joins_incomplete_untyped_fragments_across_an_image() -> None:
+    result = _extract_firecrawl_markdown(
+        "```\nitems = [\n    'apple',\n```\n\n![Example](example.png)\n\n```\n    'pear',\n]\n```\n"
+    )
+
+    assert [(block.kind, block.code) for block in result.blocks] == [
+        (StepKind.PYTHON, "items = [\n    'apple',\n    'pear',\n]"),
     ]
 
 

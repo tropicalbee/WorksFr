@@ -1,10 +1,14 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Collection
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.datastructures import Headers
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.responses import JSONResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.api import router
 from app.broker import Broker
@@ -13,7 +17,22 @@ from app.llm import LLMClient
 from app.pipeline import PipelineDeps
 from app.repair.loop import LLMProposer
 from app.sandbox.docker_sandbox import DockerSandbox
-from app.storage import SqliteDocCache, init_db
+from app.storage import SqliteDocCache, init_db, mark_interrupted_checks_failed
+
+
+class RequireAllowedOrigin:
+    def __init__(self, app: ASGIApp, allowed_origins: Collection[str]) -> None:
+        self.app = app
+        self.allowed_origins = allowed_origins
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http":
+            origins = Headers(scope=scope).getlist("origin")
+            if any(origin not in self.allowed_origins for origin in origins):
+                response = JSONResponse({"detail": "Origin is not allowed"}, status_code=403)
+                await response(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -22,6 +41,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         init_db(settings.database_path)
+        mark_interrupted_checks_failed(settings.database_path)
         executor = ThreadPoolExecutor(max_workers=settings.max_concurrent_checks)
         http = httpx.Client(timeout=30)
         llm = LLMClient(settings)
@@ -49,6 +69,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_origins=settings.cors_origins,
         allow_methods=["*"],
         allow_headers=["*"],
+    )
+    app.add_middleware(RequireAllowedOrigin, allowed_origins=settings.cors_origins)
+    app.add_middleware(
+        TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver"]
     )
     app.include_router(router)
     app.get("/api/health")(health)

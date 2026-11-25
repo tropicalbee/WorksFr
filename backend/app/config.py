@@ -3,7 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Any
 
-from pydantic import BaseModel, Field, SecretStr, field_validator
+from pydantic import AliasChoices, BaseModel, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, PydanticBaseSettingsSource, SettingsConfigDict
 
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
@@ -46,7 +46,10 @@ class Settings(BaseSettings):
 
     video_reader_base_url: str = ""
     video_reader_api_key: SecretStr = SecretStr("")
-    video_reader_model: str = ""
+    video_reader_models: Annotated[list[str], NoDecode] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("video_reader_model", "video_reader_models"),
+    )
     video_chunk_seconds: int = Field(default=300, ge=1)
     video_max_minutes: int = Field(default=60, ge=1)
     video_reads: int = Field(default=2, ge=1, le=3)
@@ -57,6 +60,8 @@ class Settings(BaseSettings):
     step_timeout_seconds: int = 60
     check_timeout_seconds: int = 900
     sandbox_memory: str = "2g"
+    sandbox_tmpfs_mb: int = Field(default=512, ge=1)
+    sandbox_file_size_mb: int = Field(default=256, ge=1)
     sandbox_cpus: float = 2.0
     sandbox_pids_limit: int = 256
     max_concurrent_checks: int = Field(default=1, ge=1)
@@ -65,7 +70,10 @@ class Settings(BaseSettings):
 
     worksfr_api_url: str = "http://127.0.0.1:8000"
 
-    cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
+    cors_origins: Annotated[list[str], NoDecode] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
 
     @classmethod
     def settings_customise_sources(
@@ -108,10 +116,26 @@ class Settings(BaseSettings):
 
         return init_settings, env_settings, dotenv_settings, provider_settings, file_secret_settings
 
-    @field_validator("llm_providers", "reader_providers", "cors_origins", mode="before")
+    @field_validator(
+        "llm_providers", "reader_providers", "cors_origins", "video_reader_models", mode="before"
+    )
     @classmethod
     def _parse_csv(cls, value: Any) -> Any:
         return _split_csv(value)
+
+    @field_validator("video_reader_models")
+    @classmethod
+    def _unique_video_models(cls, models: list[str]) -> list[str]:
+        return list(dict.fromkeys(models))
+
+    @property
+    def video_reader_model(self) -> str:
+        """Primary model for callers that make a single video reader request."""
+        return self.video_reader_models[0] if self.video_reader_models else ""
+
+    @video_reader_model.setter
+    def video_reader_model(self, value: str) -> None:
+        self.video_reader_models = self._unique_video_models(_split_csv(value))
 
 
 @lru_cache

@@ -162,6 +162,13 @@ def test_tools_are_registered():
     assert names == {"check_tutorial", "check_code", "get_report", "recent_checks"}
 
 
+def test_replacement_tool_descriptions_include_sandbox_note() -> None:
+    descriptions = {tool.name: tool.description for tool in run(mcp_server.mcp.list_tools())}
+    note = "Ran in the sandbox. Read it before you run it on your machine."
+    for name in ("check_tutorial", "check_code", "get_report"):
+        assert note in descriptions[name]
+
+
 def test_unreachable_backend_message_reaches_the_client(monkeypatch):
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("refused")

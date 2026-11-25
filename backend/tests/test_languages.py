@@ -51,7 +51,8 @@ def test_markdown_fence_alias_gives_kind(alias: str, kind: StepKind) -> None:
     _, raws = parse_markdown(f"```{alias}\n!x % y\n```\n")
     [block] = build_blocks(raws)
     assert block.kind == kind
-    assert block.runnable_code == "!x % y"
+    assert block.code == "!x % y"
+    assert block.runnable_code == ("" if alias in ("jsx", "tsx") else "!x % y")
 
 
 @pytest.mark.parametrize(("alias", "kind"), ALIASES)
@@ -154,9 +155,36 @@ def test_paste_auto_c_and_cpp() -> None:
     assert cls.blocks[0].kind == StepKind.CPP
 
 
-def test_paste_auto_falls_back_to_javascript() -> None:
+def test_paste_auto_detects_javascript_markers() -> None:
     result = extract_paste("function f() { return 1 }\nf();\n", None)
     assert [b.kind for b in result.blocks] == [StepKind.JAVASCRIPT]
+
+
+def test_paste_auto_ignores_typescript_markers_in_javascript_text() -> None:
+    result = extract_paste('const message = "as const";\n// enum Mode { On }', None)
+    assert [block.kind for block in result.blocks] == [StepKind.JAVASCRIPT]
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        'interface P { name: string }\nconst p: P = {name: "a"};\nconsole.log(p.name)',
+        "type Score = number[];",
+        "enum Score { Low, High }",
+        "const score: number = 1;",
+        "function show(name: string) { console.log(name); }",
+        "const show = (name: string) => console.log(name);",
+        "const scores = [1, 2] as const;",
+    ],
+)
+def test_paste_auto_detects_typescript_markers(code: str) -> None:
+    result = extract_paste(code, None)
+    assert [block.kind for block in result.blocks] == [StepKind.TYPESCRIPT]
+
+
+def test_paste_auto_keeps_aliases_that_parse_as_python() -> None:
+    result = extract_paste('type Score = int', None)
+    assert [block.kind for block in result.blocks] == [StepKind.PYTHON]
 
 
 def test_paste_splits_at_blank_lines_only_at_brace_depth_zero() -> None:
@@ -307,8 +335,12 @@ def test_extraction_fields_for_markdown_fences() -> None:
 
 def test_find_install_pins_reads_npm_install_lines() -> None:
     pins = find_install_pins(
-        [(0, "npm install lodash@4.17.21 express\npip install pandas==2.0"), (1, "yarn add a@^1")],
-        {"pandas": "2.1.0", "lodash": "4.17.21"},
+        [
+            (0, "npm install lodash@4.17.21 express\npip install pandas==2.0"),
+            (1, "yarn add a@^1 @scope/my.widget@^1.2.0"),
+        ],
+        {"pandas": "2.1.0", "lodash": "1.0", "a": "2.0"},
+        npm_versions={"lodash": "4.18.0", "@scope/my.widget": "1.3.0"},
     )
     assert pins == [
         InstallPin(
@@ -316,7 +348,7 @@ def test_find_install_pins_reads_npm_install_lines() -> None:
             line="npm install lodash@4.17.21 express",
             package="lodash",
             pinned="4.17.21",
-            used="4.17.21",
+            used="4.18.0",
             ecosystem="npm",
         ),
         InstallPin(
@@ -327,7 +359,20 @@ def test_find_install_pins_reads_npm_install_lines() -> None:
             used="2.1.0",
         ),
         InstallPin(
-            step_idx=1, line="yarn add a@^1", package="a", pinned="^1", used=None, ecosystem="npm"
+            step_idx=1,
+            line="yarn add a@^1 @scope/my.widget@^1.2.0",
+            package="a",
+            pinned="^1",
+            used=None,
+            ecosystem="npm",
+        ),
+        InstallPin(
+            step_idx=1,
+            line="yarn add a@^1 @scope/my.widget@^1.2.0",
+            package="@scope/my.widget",
+            pinned="^1.2.0",
+            used="1.3.0",
+            ecosystem="npm",
         ),
     ]
     assert pins[1].ecosystem == "pypi"

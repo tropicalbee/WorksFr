@@ -1,18 +1,23 @@
 """Extraction from pasted text: Markdown with fenced code, or plain code. Never executed."""
 
 import ast
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
 from app.extract.blocks import (
+    C_LIKE_COMMENTS_AND_STRINGS,
     LANGUAGE_KINDS,
     build_blocks,
+    classify,
     detect_c_family,
     has_js_markers,
+    has_jsx_tags,
     looks_pythonish,
     normalize_text,
     parse_python,
 )
+from app.extract.errors import ExtractionError
 from app.extract.libs import library_fields
 from app.extract.markdown_doc import parse_markdown
 from app.models import Block, Extraction, SourceFormat, SourceKind, StepKind
@@ -21,6 +26,15 @@ PASTE_SOURCE = "Pasted code"
 _DEFAULT_TITLE = "Pasted code"
 _SHELL_PREFIXES = ("!", "%", "$ ", "pip install")
 _NODE_SHELL_PREFIXES = ("$ ", "pip install", "npm ", "npx ", "yarn ", "pnpm ")
+_TS_PARAMETER = r"(?:[^(){}\n]*,)?[ \t]*[\w$]+\??[ \t]*:[ \t]*[\w$]+\b"
+_TS_MARKERS = re.compile(
+    r"^[ \t]*(?:export[ \t]+)?(?:declare[ \t]+)?(?:"
+    r"(?:interface|enum)[ \t]+[\w$]+[^\n{]*\{|type[ \t]+[\w$]+[^\n=]*=|"
+    r"(?:const|let|var)[ \t]+[\w$]+[ \t]*:)"
+    rf"|\bfunction[^\n(]*\({_TS_PARAMETER}"
+    rf"|=[ \t]*(?:async[ \t]*)?\({_TS_PARAMETER}[^()\n]*\)\s*=>|\bas[ \t]+const\b",
+    re.M,
+)
 
 
 @dataclass(frozen=True)
@@ -170,14 +184,12 @@ def _language_blocks(text: str, kind: StepKind) -> list[Block]:
         for chunk in _code_chunks(run):
             code = normalize_text(chunk)
             if code.strip():
-                pieces.append(Block(idx=0, kind=kind, code=code, runnable_code=code))
+                pieces.append(classify(code, kind.value))
     return pieces
 
 
-def _resolve_language(text: str, language: str) -> StepKind:
-    """The kind of a plain paste. `auto` is Python when the non-shell lines parse as Python,
-    else C or C++ for an `#include <`, else JavaScript. Python 2 style code with none of the
-    JavaScript signs stays Python so the sandbox reports its error."""
+def _resolve_language(text: str, language: str) -> StepKind | None:
+    """Choose a supported language from an explicit selection or signs in a plain paste."""
     name = language.strip().lower()
     if name in ("python", "py"):
         return StepKind.PYTHON
@@ -186,14 +198,19 @@ def _resolve_language(text: str, language: str) -> StepKind:
     python_lines = "\n".join(
         line for is_shell, run in _runs(text.split("\n")) if not is_shell for line in run
     )
-    if not python_lines.strip() or parse_python(python_lines) is not None:
+    if parse_python(python_lines) is not None:
         return StepKind.PYTHON
     c_family = detect_c_family(text)
     if c_family is not None:
         return c_family
-    if has_js_markers(text) or not looks_pythonish(python_lines):
+    unquoted = C_LIKE_COMMENTS_AND_STRINGS.sub(
+        lambda match: " " + "\n" * match[0].count("\n"), text
+    )
+    if _TS_MARKERS.search(unquoted):
+        return StepKind.TYPESCRIPT
+    if has_js_markers(text) or has_jsx_tags(text):
         return StepKind.JAVASCRIPT
-    return StepKind.PYTHON
+    return StepKind.PYTHON if looks_pythonish(python_lines) else None
 
 
 def extract_paste(code: str, title: str | None, language: str = "auto") -> Extraction:
@@ -208,6 +225,8 @@ def extract_paste(code: str, title: str | None, language: str = "auto") -> Extra
             block.context = ""
     else:
         kind = _resolve_language(text, language)
+        if kind is None:
+            raise ExtractionError("No Python, JavaScript, TypeScript, C or C++ code found.")
         blocks = _plain_blocks(text) if kind == StepKind.PYTHON else _language_blocks(text, kind)
         for index, block in enumerate(blocks):
             block.idx = index

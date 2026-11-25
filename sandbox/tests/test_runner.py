@@ -36,6 +36,14 @@ NODE_REDECLARATION = (
     "SyntaxError: Identifier 'value' has already been declared\n"
     "    at wrapSafe (node:internal/modules/cjs/loader:1700:18)\n"
 )
+NODE_TOP_LEVEL_AWAIT = (
+    "SyntaxError: await is only valid in async functions and the top level bodies of modules\n"
+)
+TSX_TOP_LEVEL_AWAIT = (
+    "Error: Transform failed with 1 error:\n"
+    "/home/sandbox/work/example.cts:2:14: ERROR: Top-level await is currently not "
+    'supported with the "cjs" output format\n'
+)
 C_REDECLARATION = (
     "current.c:2:7: error: conflicting types for ‘value’; have ‘float’\n"
     "history.c:1:5: note: previous definition of ‘value’ with type ‘int’\n"
@@ -252,7 +260,7 @@ class RunnerHelperTests(unittest.TestCase):
         self.assertNotIn("((x) * 2)", body)
 
 
-class ChildRedeclarationTests(unittest.TestCase):
+class ChildExecutionTests(unittest.TestCase):
     def setUp(self) -> None:
         self.capture = Mock(spec=Capture)
         self.capture.read.side_effect = lambda: (
@@ -275,6 +283,81 @@ class ChildRedeclarationTests(unittest.TestCase):
     def node_marker(self) -> str:
         boundary = self.sources[-1].split("globalThis.process.stderr.write(", 1)[1]
         return json.JSONDecoder().raw_decode(boundary)[0]
+
+    def test_node_top_level_await_retries_as_module(self) -> None:
+        for lang, suffixes, diagnostic in (
+            ("javascript", [".cjs", ".mjs"], NODE_TOP_LEVEL_AWAIT),
+            ("typescript", [".cts", ".mts"], TSX_TOP_LEVEL_AWAIT),
+        ):
+            with self.subTest(lang=lang):
+                old = "const previous = 7;"
+                code = "const value = await Promise.resolve(previous); console.log(value);"
+                self.executor.node_history = [(lang, old)]
+                self.sources.clear()
+                attempts: list[str] = []
+
+                def run(
+                    args: list[str],
+                    workdir: Path,
+                    attempts: list[str] = attempts,
+                    diagnostic: str = diagnostic,
+                ) -> int:
+                    attempts.append(Path(args[-1]).suffix)
+                    if len(attempts) == 1:
+                        return self.output(1, stderr=diagnostic)
+                    marker = self.node_marker()
+                    return self.output(0, marker + "7\n", marker)
+
+                self.capture.run_child.side_effect = run
+                result = self.executor.execute({"id": "s2", "code": code}, lang)
+                self.assertEqual(attempts, suffixes)
+                self.assertEqual(result["status"], "ok")
+                self.assertEqual(result["stdout"], "7\n")
+                self.assertIn(old, self.sources[-1])
+                self.assertEqual(self.executor.node_history, [(lang, old), (lang, code)])
+
+    def test_node_top_level_await_retries_only_once(self) -> None:
+        self.capture.run_child.side_effect = lambda *_: self.output(1, stderr=NODE_TOP_LEVEL_AWAIT)
+        result = self.executor.execute(
+            {"id": "s1", "code": "await Promise.resolve(1);"}, "javascript"
+        )
+        self.assertEqual(self.capture.run_child.call_count, 2)
+        self.assertEqual(result["error"]["type"], "SyntaxError")
+
+    def test_node_history_exit_retries_current_step_in_isolation(self) -> None:
+        for prior_exit in (0, 7):
+            with self.subTest(prior_exit=prior_exit):
+                old = "process.exit();"
+                code = "console.log(42);"
+                self.executor.node_history = [("javascript", old)]
+                self.sources.clear()
+
+                def run(args: list[str], workdir: Path, prior_exit: int = prior_exit) -> int:
+                    if len(self.sources) == 1:
+                        return self.output(prior_exit)
+                    marker = self.node_marker()
+                    return self.output(0, marker + "42\n", marker)
+
+                self.capture.run_child.side_effect = run
+                result = self.executor.execute({"id": "s2", "code": code}, "javascript")
+                self.assertEqual(result["status"], "ok")
+                self.assertEqual(result["stdout"], "42\n")
+                self.assertNotIn(old, self.sources[-1])
+                self.assertEqual(self.executor.node_history, [("javascript", code)])
+
+    def test_node_current_exit_is_not_retried(self) -> None:
+        old = "const value = 7;"
+        self.executor.node_history = [("javascript", old)]
+
+        def run(args: list[str], workdir: Path) -> int:
+            marker = self.node_marker()
+            return self.output(7, marker, marker)
+
+        self.capture.run_child.side_effect = run
+        result = self.executor.execute({"id": "s2", "code": "process.exit(7);"}, "javascript")
+        self.assertEqual(self.capture.run_child.call_count, 1)
+        self.assertEqual(result["error"]["type"], "ExitStatus")
+        self.assertEqual(self.executor.node_history, [("javascript", old)])
 
     def test_node_successful_retry_replaces_history(self) -> None:
         old = "const value = 1;\nconst previousOnly = 4;"
@@ -327,6 +410,26 @@ class ChildRedeclarationTests(unittest.TestCase):
         self.assertEqual(result["error"]["type"], "SyntaxError")
         self.assertEqual(self.capture.run_child.call_count, 1)
         self.assertEqual(self.executor.node_history, [("javascript", old)])
+
+    def test_native_compile_only_result_keeps_definitions_for_later_run(self) -> None:
+        for lang in ("c", "cpp"):
+            with self.subTest(lang=lang):
+                code = "int value(void) { return 42; }"
+                self.sources.clear()
+                self.capture.reset_mock()
+                self.capture.run_child.side_effect = lambda *_: self.output(0)
+                compile_only = self.executor.execute({"id": "s1", "code": code}, lang)
+                self.assertEqual(compile_only["status"], "ok")
+                self.assertEqual(compile_only["result"], "compiled")
+                self.assertEqual(self.capture.run_child.call_count, 1)
+                self.assertIn("-c", self.capture.run_child.call_args.args[0])
+
+                program = "int main(void) { return value() == 42 ? 0 : 1; }"
+                executed = self.executor.execute({"id": "s2", "code": program}, lang)
+                self.assertEqual(executed["status"], "ok")
+                self.assertIsNone(executed["result"])
+                self.assertEqual(self.capture.run_child.call_count, 3)
+                self.assertIn(code, self.sources[-1])
 
     def test_native_retry_uses_isolated_wrapping_and_replaces_only_on_success(self) -> None:
         old = "int value = 1;"

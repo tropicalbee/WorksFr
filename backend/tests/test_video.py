@@ -37,7 +37,17 @@ PRIVATE = (
     "This video isn't public, so it can't be read. Upload the notebook or paste the code instead."
 )
 NO_CODE = "No code was visible in this video."
-QUOTA = "The video reader's quota is used up for now. Try again later."
+QUOTA = (
+    "Gemini, which reads the video, has used up its free quota (tried: {models}). "
+    "This is a limit on Google's side, not a problem with your link. It resets daily; "
+    "try again later, or check a written tutorial."
+)
+OVERLOADED = (
+    "Gemini, which reads the video, is overloaded right now (HTTP 503; tried: {models}). "
+    "This is on Google's side, not a problem with your link. Try again in a few minutes."
+)
+PRIMARY_MODEL = "reader-primary"
+FALLBACK_MODEL = "reader-fallback"
 
 
 @pytest.fixture
@@ -56,6 +66,12 @@ def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
     )
 
 
+@pytest.fixture
+def fallback_settings(settings: Settings) -> Settings:
+    settings.video_reader_model = f"{PRIMARY_MODEL},{FALLBACK_MODEL}"
+    return settings
+
+
 def block(code: str = "x = 1", *, at: int = 0, kind: str = "python", **kw: Any) -> dict[str, Any]:
     return {"start_seconds": at, "kind": kind, "code": code, "partial": False, **kw}
 
@@ -72,7 +88,17 @@ def reply(blocks: list[dict[str, Any]] | None = None, *, text: str | None = None
 
 
 def end_marker() -> httpx.Response:
-    return httpx.Response(400, json={"error": {"status": "INVALID_ARGUMENT"}})
+    # The exact reply Gemini's Interactions API gave for a chunk past the end (2026-11-25).
+    return httpx.Response(
+        400,
+        json={
+            "error": {
+                "message": "Unable to process input: the file or media data is empty, "
+                "corrupted, or malformed.",
+                "code": "invalid_request",
+            }
+        },
+    )
 
 
 class Clock:
@@ -198,25 +224,24 @@ def test_two_chunks_then_end_marker_and_cross_boundary_growth(settings: Settings
     assert result.blocks[0].video_timestamp == 302
 
 
-def test_interactions_past_end_reply_ends_the_video(settings: Settings) -> None:
-    # The exact reply Gemini's Interactions API gave for a chunk past the end (2026-11-25).
-    past_end = {
-        "error": {
-            "message": "Unable to process input: the file or media data is empty, "
-            "corrupted, or malformed.",
-            "code": "invalid_request",
-        }
-    }
+def test_interactions_past_end_reply_ends_the_video(fallback_settings: Settings) -> None:
     replies = iter(
         [
             httpx.Response(200, json=reply([block("x = 1", at=10)])),
-            httpx.Response(400, json=past_end),
+            end_marker(),
         ]
     )
 
-    with httpx.Client(transport=httpx.MockTransport(lambda _: next(replies))) as http:
-        result = extract_video(URL, settings, http)
+    models: list[str] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        models.append(json.loads(request.content)["model"])
+        return next(replies)
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as http:
+        result = extract_video(URL, fallback_settings, http)
     assert [item.code for item in result.blocks] == ["x = 1"]
+    assert models == [PRIMARY_MODEL, PRIMARY_MODEL]
 
 
 def test_busy_model_is_retried_after_short_waits(settings: Settings) -> None:
@@ -238,8 +263,29 @@ def test_busy_model_is_retried_after_short_waits(settings: Settings) -> None:
 
 def test_model_busy_after_every_retry_still_fails(settings: Settings) -> None:
     with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(503))) as http:
-        with pytest.raises(ExtractionError, match="HTTP 503"):
+        with pytest.raises(ExtractionError) as caught:
             VideoReader(settings, http, sleep=lambda _: None).extract(URL)
+    assert str(caught.value) == OVERLOADED.format(models=settings.video_reader_model)
+
+
+def test_busy_model_switches_after_existing_retries(fallback_settings: Settings) -> None:
+    fallback_settings.video_max_minutes = 5
+    models: list[str] = []
+    sleeps: list[float] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        models.append(body["model"])
+        assert body["input"][1]["processing"]["start_offset"] == "0s"
+        if len(models) <= 3:
+            return httpx.Response(503)
+        return httpx.Response(200, json=reply([block()]))
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as http:
+        result = VideoReader(fallback_settings, http, sleep=sleeps.append).extract(URL)
+    assert result.blocks
+    assert sleeps == [5, 15]
+    assert models == [PRIMARY_MODEL] * 3 + [FALLBACK_MODEL]
 
 
 def test_repeated_code_across_boundary_is_kept_once(settings: Settings) -> None:
@@ -308,22 +354,45 @@ def test_missing_configuration_message(settings: Settings, missing: str) -> None
     assert str(caught.value) == MISSING
 
 
-def test_first_chunk_400_is_the_private_video_message(settings: Settings) -> None:
-    with httpx.Client(transport=httpx.MockTransport(lambda _: end_marker())) as http:
+@pytest.mark.parametrize("status", [400, 403])
+def test_first_chunk_private_video_does_not_switch(
+    fallback_settings: Settings, status: int
+) -> None:
+    models: list[str] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        models.append(json.loads(request.content)["model"])
+        return httpx.Response(status, json={"error": {"status": "INVALID_ARGUMENT"}})
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as http:
         with pytest.raises(ExtractionError) as caught:
-            extract_video(URL, settings, http)
+            extract_video(URL, fallback_settings, http)
     assert str(caught.value) == PRIVATE
+    assert models == [PRIMARY_MODEL]
 
 
-def test_other_400_after_a_chunk_is_not_an_end_marker(settings: Settings) -> None:
+@pytest.mark.parametrize(
+    "error",
+    [
+        {"status": "FAILED_PRECONDITION"},
+        {"status": "INVALID_ARGUMENT", "message": "The processing window is invalid."},
+        {"code": "invalid_request", "message": "The processing window is invalid."},
+        {"status": "INVALID_ARGUMENT"},
+    ],
+)
+def test_other_400_after_a_chunk_is_not_an_end_marker(
+    settings: Settings, error: dict[str, str]
+) -> None:
     replies = iter(
         [
             httpx.Response(200, json=reply([block()])),
-            httpx.Response(400, json={"error": {"status": "FAILED_PRECONDITION"}}),
+            httpx.Response(400, json={"error": error}),
         ]
     )
     with httpx.Client(transport=httpx.MockTransport(lambda _: next(replies))) as http:
-        with pytest.raises(ExtractionError):
+        with pytest.raises(
+            ExtractionError, match=r"The video reader request failed \(HTTP 400\)\."
+        ):
             extract_video(URL, settings, http)
 
 
@@ -431,8 +500,61 @@ def test_long_or_repeated_429_uses_quota_message(
     with httpx.Client(transport=httpx.MockTransport(respond)) as http:
         with pytest.raises(ExtractionError) as caught:
             VideoReader(settings, http, sleep=clock.sleep, monotonic=clock.monotonic).extract(URL)
-    assert str(caught.value) == QUOTA
+    assert str(caught.value) == QUOTA.format(models=settings.video_reader_model)
     assert calls == calls_expected
+
+
+def test_quota_fallback_sticks_for_the_current_check_only(
+    fallback_settings: Settings, caplog: pytest.LogCaptureFixture
+) -> None:
+    fallback_settings.video_max_minutes = 10
+    calls: list[tuple[str, str]] = []
+    sleeps: list[float] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        calls.append((body["model"], body["input"][1]["processing"]["start_offset"]))
+        if len(calls) == 1:
+            return httpx.Response(429, headers={"Retry-After": "2"})
+        return httpx.Response(200, json=reply([block(f"x = {len(calls)}")]))
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as http:
+        reader = VideoReader(fallback_settings, http, sleep=sleeps.append)
+        with caplog.at_level(logging.INFO, logger="app.extract.video"):
+            assert reader.extract(URL).blocks
+            assert reader.extract(URL).blocks
+    assert calls == [
+        (PRIMARY_MODEL, "0s"),
+        (FALLBACK_MODEL, "0s"),
+        (FALLBACK_MODEL, "300s"),
+        (PRIMARY_MODEL, "0s"),
+        (PRIMARY_MODEL, "300s"),
+    ]
+    assert sleeps == []
+    switches = [message for message in caplog.messages if "switching to" in message]
+    assert switches == [f"video reader: {PRIMARY_MODEL} quota used, switching to {FALLBACK_MODEL}"]
+    assert KEY not in caplog.text
+
+
+@pytest.mark.parametrize(
+    "status,requests_per_model,message",
+    [(429, 1, QUOTA), (503, 3, OVERLOADED)],
+    ids=["quota", "overloaded"],
+)
+def test_exhausted_models_are_named_in_failure_message(
+    fallback_settings: Settings, status: int, requests_per_model: int, message: str
+) -> None:
+    models: list[str] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        models.append(json.loads(request.content)["model"])
+        return httpx.Response(status, headers={"Retry-After": "21"}, json={"error": KEY})
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as http:
+        with pytest.raises(ExtractionError) as caught:
+            VideoReader(fallback_settings, http, sleep=lambda _: None).extract(URL)
+    assert models == [PRIMARY_MODEL] * requests_per_model + [FALLBACK_MODEL] * requests_per_model
+    assert str(caught.value) == message.format(models=f"{PRIMARY_MODEL}, {FALLBACK_MODEL}")
 
 
 def test_minimum_interval_paces_chunks_and_notifies(settings: Settings) -> None:
@@ -887,4 +1009,4 @@ def test_quota_message_applies_to_every_read(settings: Settings) -> None:
     with httpx.Client(transport=httpx.MockTransport(lambda _: next(replies))) as http:
         with pytest.raises(ExtractionError) as caught:
             extract_video(URL, settings, http)
-    assert str(caught.value) == QUOTA
+    assert str(caught.value) == QUOTA.format(models=settings.video_reader_model)

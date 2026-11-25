@@ -7,6 +7,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 from test_pipeline_video import FakeSandbox, PrivateCache, Sink, UnavailableProposer
+from test_video import end_marker
 
 from app.api import router
 from app.config import Settings
@@ -25,7 +26,7 @@ def test_saved_video_pip_output_reaches_environment_pins() -> None:
             )
             for window in ("0-300", "300-600", "600-900")
         ]
-        + [httpx.Response(400, json={"error": {"status": "INVALID_ARGUMENT"}})]
+        + [end_marker()]
     )
     config = Settings(
         _env_file=None,

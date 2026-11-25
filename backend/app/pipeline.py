@@ -230,13 +230,26 @@ def run_check(
             clock=deps.clock,
         ) as session:
             environment = session.start(extraction.packages, npm_packages=extraction.npm_packages)
+            pypi_names = environment.versions.keys() | set(environment.failed_packages)
+
+            def npm_report_name(package: str) -> str:
+                return f"npm:{package}" if package in pypi_names else package
+
             sink.emit(
                 EnvironmentEvent(
-                    versions=environment.versions,
-                    failed_packages=environment.failed_packages,
+                    versions=environment.versions
+                    | {
+                        npm_report_name(package): version
+                        for package, version in environment.npm_versions.items()
+                    },
+                    failed_packages=[
+                        *environment.failed_packages,
+                        *(npm_report_name(package) for package in environment.failed_npm_packages),
+                    ],
                     install_pins=find_install_pins(
                         ((block.idx, block.code) for block in extraction.blocks),
                         environment.versions,
+                        npm_versions=environment.npm_versions,
                         output_blocks=(
                             (block.idx, block.code)
                             for block in extraction.blocks

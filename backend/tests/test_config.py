@@ -13,21 +13,32 @@ from app.config import ProviderConfig, Settings
 def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in Settings.model_fields:
         monkeypatch.delenv(name.upper(), raising=False)
+    monkeypatch.delenv("VIDEO_READER_MODEL", raising=False)
 
 
 def test_defaults() -> None:
     s = Settings(_env_file=None)
     assert s.llm_providers == []
     assert s.providers == []
-    assert s.cors_origins == ["http://localhost:5173"]
+    assert s.cors_origins == ["http://localhost:5173", "http://127.0.0.1:5173"]
     assert s.database_path == "worksfr.db"
     assert s.sandbox_image == "worksfr-sandbox"
     assert s.step_timeout_seconds == 60
     assert s.check_timeout_seconds == 900
     assert s.sandbox_memory == "2g"
+    assert s.sandbox_tmpfs_mb == 512
+    assert s.sandbox_file_size_mb == 256
     assert s.sandbox_cpus == 2.0
     assert s.sandbox_pids_limit == 256
     assert s.tavily_api_key.get_secret_value() == ""
+
+
+def test_sandbox_storage_limits_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SANDBOX_TMPFS_MB", "600")
+    monkeypatch.setenv("SANDBOX_FILE_SIZE_MB", "300")
+    settings = Settings(_env_file=None)
+    assert settings.sandbox_tmpfs_mb == 600
+    assert settings.sandbox_file_size_mb == 300
 
 
 def test_comma_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -126,6 +137,7 @@ def test_video_settings_defaults() -> None:
     assert settings.video_reader_base_url == ""
     assert settings.video_reader_api_key.get_secret_value() == ""
     assert settings.video_reader_model == ""
+    assert settings.video_reader_models == []
     assert settings.video_chunk_seconds == 300
     assert settings.video_max_minutes == 60
     assert settings.video_reader_min_interval_seconds == 0
@@ -145,10 +157,33 @@ def test_video_settings_environment_and_secret(monkeypatch: pytest.MonkeyPatch) 
     assert settings.video_reader_base_url == "https://video.test/v1beta"
     assert settings.video_reader_api_key.get_secret_value() == "video-secret-key"
     assert settings.video_reader_model == "video-model"
+    assert settings.video_reader_models == ["video-model"]
     assert settings.video_chunk_seconds == 120
     assert settings.video_max_minutes == 45
     assert settings.video_reader_min_interval_seconds == 2.5
     assert "video-secret-key" not in repr(settings) + str(settings)
+
+
+def test_video_models_parse_in_fallback_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VIDEO_READER_MODEL", " primary , , fallback, primary ,")
+    settings = Settings(_env_file=None)
+    assert settings.video_reader_models == ["primary", "fallback"]
+    assert settings.video_reader_model == "primary"
+
+
+def test_video_model_setting_precedence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    dotenv = tmp_path / ".env"
+    dotenv.write_text("VIDEO_READER_MODEL=file-first,file-second\n", encoding="utf-8")
+    assert Settings(_env_file=dotenv).video_reader_models == ["file-first", "file-second"]
+
+    monkeypatch.setenv("VIDEO_READER_MODEL", "env-model")
+    assert Settings(_env_file=dotenv).video_reader_models == ["env-model"]
+    assert Settings(_env_file=dotenv, video_reader_model="legacy-init").video_reader_models == [
+        "legacy-init"
+    ]
+    assert Settings(_env_file=dotenv, video_reader_models=["init-model"]).video_reader_models == [
+        "init-model"
+    ]
 
 
 @pytest.mark.parametrize(

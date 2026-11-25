@@ -132,6 +132,68 @@ def test_pipeline_emits_install_pins() -> None:
     assert pin.used == environment.versions["nbformat"]
 
 
+def test_pipeline_reports_and_persists_npm_versions_and_pins(tmp_path: Path) -> None:
+    from unittest.mock import Mock
+
+    import httpx
+    from test_pipeline import Cache, Proposer
+
+    from app.broker import Broker
+    from app.config import Settings
+    from app.events import EnvironmentEvent
+    from app.extract import PastedCode
+    from app.models import Environment, ExecResult
+    from app.pipeline import PipelineDeps, run_check
+    from app.recorder import RecorderSink
+    from app.sandbox.interface import Sandbox
+    from app.storage import list_events
+
+    db = str(tmp_path / "npm.db")
+    settings = Settings(_env_file=None, providers=[])
+    init_db(db)
+    create_check(
+        db,
+        CheckReport(
+            id="npm", source_kind=SourceKind.PASTE, source="Pasted code", status=CheckStatus.RUNNING
+        ),
+    )
+    sandbox = Mock(spec=Sandbox)
+    sandbox.start.return_value = Environment(
+        versions={"openai": "2.0.0"},
+        failed_packages=["shared-missing"],
+        npm_versions={"openai": "5.0.0", "express": "5.1.0"},
+        failed_npm_packages=["shared-missing", "node-missing"],
+    )
+    sandbox.exec.return_value = ExecResult(id="s1", status="ok")
+    source = PastedCode(
+        "```bash\npip install openai==1.0.0\n"
+        "npm i openai@4.0.0 express@4.17.0 node-missing@^1\n```\n"
+        "```js\nconsole.log('ready');\n```"
+    )
+    with httpx.Client(
+        transport=httpx.MockTransport(lambda _: pytest.fail("Unexpected HTTP"))
+    ) as http:
+        deps = PipelineDeps(settings, lambda _: sandbox, Proposer(), http, Cache())
+        run_check("npm", source, deps, RecorderSink(db, "npm", Broker()))
+
+    [event_json] = [payload for _, kind, payload in list_events(db, "npm") if kind == "environment"]
+    event = EnvironmentEvent.model_validate_json(event_json)
+    assert event.versions == {"openai": "2.0.0", "npm:openai": "5.0.0", "express": "5.1.0"}
+    assert set(event.failed_packages) == {"shared-missing", "npm:shared-missing", "node-missing"}
+    assert [(p.ecosystem, p.package, p.pinned, p.used) for p in event.install_pins] == [
+        ("pypi", "openai", "==1.0.0", "2.0.0"),
+        ("npm", "openai", "4.0.0", "5.0.0"),
+        ("npm", "express", "4.17.0", "5.1.0"),
+        ("npm", "node-missing", "^1", None),
+    ]
+
+    report = get_report(db, "npm")
+    assert report is not None and report.status == CheckStatus.DONE
+    assert report.versions == event.versions
+    assert report.failed_packages == event.failed_packages
+    assert report.install_pins == event.install_pins
+
+
 def test_saved_video_output_pins_only_tutorial_packages() -> None:
     reply = parse_reply(json.loads((FIXTURES / "video" / "CbpsDMwFG2g_300-600.json").read_text()))
     pins = find_install_pins(

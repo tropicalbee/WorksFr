@@ -1,9 +1,12 @@
 import tempfile
+from collections.abc import AsyncIterator
 from concurrent.futures import Future
 from pathlib import Path
+from unittest.mock import Mock
 
 import httpx
 import pytest
+from fastapi import Request
 from fastapi.testclient import TestClient
 from support.local_sandbox import LocalRunnerSandbox
 from test_pipeline import Cache, Proposer, notebook
@@ -80,6 +83,42 @@ def test_post_report_and_replay_log(client: TestClient) -> None:
     assert client.get("/api/health").json() == {"status": "ok"}
 
 
+@pytest.mark.parametrize(
+    ("headers", "expected_status"),
+    [
+        ({"Origin": "https://other.example"}, 403),
+        ({"Host": "127.0.0.1:8000", "Origin": "http://localhost:5173"}, 200),
+        ({"Host": "127.0.0.1:8000", "Origin": "http://127.0.0.1:5173"}, 200),
+        ({"Host": "localhost:8000"}, 200),
+    ],
+)
+def test_notebook_submit_checks_origin(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    headers: dict[str, str],
+    expected_status: int,
+) -> None:
+    submit = Mock()
+    monkeypatch.setattr(client.app.state.executor, "submit", submit)
+    response = client.post(
+        "/api/checks/notebook",
+        files={"file": ("test.ipynb", notebook())},
+        headers=headers,
+    )
+    assert response.status_code == expected_status
+    if expected_status == 200:
+        submit.assert_called_once()
+        assert response.json()["check_id"]
+        if "Origin" in headers:
+            assert response.headers["Access-Control-Allow-Origin"] == headers["Origin"]
+    else:
+        submit.assert_not_called()
+
+
+def test_reports_require_a_trusted_host(client: TestClient) -> None:
+    assert client.get("/api/checks", headers={"Host": "other.example"}).status_code == 400
+
+
 def test_rejections_and_not_found(client: TestClient) -> None:
     assert client.post("/api/checks", json={"url": "http://127.0.0.1"}).status_code == 422
     for filename, data in (
@@ -93,6 +132,55 @@ def test_rejections_and_not_found(client: TestClient) -> None:
         )
     assert client.get("/api/checks/missing").status_code == 404
     assert client.get("/api/checks/missing/events").status_code == 404
+
+
+def test_notebook_rejects_oversized_content_length_before_reading_body(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    body_read = False
+    stream = Request.stream
+
+    def record_body_read(request: Request) -> AsyncIterator[bytes]:
+        nonlocal body_read
+        body_read = True
+        return stream(request)
+
+    monkeypatch.setattr(Request, "stream", record_body_read)
+    monkeypatch.setattr(client.app.state.executor, "submit", Mock())
+    response = client.post(
+        "/api/checks/notebook",
+        files={"file": ("test.ipynb", notebook())},
+        headers={"Content-Length": str(2 * 1024 * 1024)},
+    )
+    assert not body_read
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Notebook exceeds the upload size limit"}
+
+
+def test_notebook_upload_allows_multipart_overhead_at_file_limit(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    submit = Mock()
+    monkeypatch.setattr(client.app.state.executor, "submit", submit)
+    limit = 1024 * 1024
+    request = client.build_request(
+        "POST", "/api/checks/notebook", files={"file": ("test.ipynb", notebook().ljust(limit))}
+    )
+    assert int(request.headers["Content-Length"]) > limit
+    assert client.send(request).status_code == 200
+    submit.assert_called_once()
+    operation = client.get("/openapi.json").json()["paths"]["/api/checks/notebook"]["post"]
+    assert "multipart/form-data" in operation["requestBody"]["content"]
+
+
+def test_notebook_without_content_length_still_enforces_file_limit(client: TestClient) -> None:
+    request = client.build_request(
+        "POST", "/api/checks/notebook", files={"file": ("test.ipynb", b"x" * (1024 * 1024 + 1))}
+    )
+    del request.headers["Content-Length"]
+    response = client.send(request)
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Notebook exceeds the upload size limit"}
 
 
 def test_download_route_is_removed(client: TestClient) -> None:

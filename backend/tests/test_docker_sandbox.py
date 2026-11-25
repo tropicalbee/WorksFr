@@ -87,7 +87,7 @@ class Commands:
         if "-c" in args:
             output = '{"pandas":"2.2.3"}'
         if args[5:7] == ["npm", "install"]:
-            packages = tuple(args[9:])
+            packages = tuple(args[args.index("--no-fund") + 1 :])
             status = int(packages in self.npm_install_failures)
         if args[5:7] == ["node", "-e"]:
             output = json.dumps(
@@ -120,6 +120,9 @@ def test_limits_and_preparation_order(sandbox: DockerSandbox, commands: Commands
     run = commands.calls[0]
     for flag, value in {
         "--memory": "2g",
+        "--memory-swap": "2g",
+        "--ulimit": "fsize=268435456:268435456",
+        "--tmpfs": "/tmp:rw,exec,nosuid,nodev,size=512m,mode=1777",
         "--cpus": "2.0",
         "--pids-limit": "256",
         "--cap-drop": "ALL",
@@ -133,6 +136,18 @@ def test_limits_and_preparation_order(sandbox: DockerSandbox, commands: Commands
     disconnect = next(i for i, args in enumerate(commands.calls) if "disconnect" in args)
     assert install < disconnect < len(commands.calls) - 1
     assert commands.calls[-1][1:3] == ["exec", "-i"]
+    sandbox.close()
+
+
+def test_storage_limits_use_settings(sandbox: DockerSandbox, commands: Commands) -> None:
+    sandbox.settings.sandbox_memory = "1g"
+    sandbox.settings.sandbox_tmpfs_mb = 320
+    sandbox.settings.sandbox_file_size_mb = 128
+    sandbox.start([])
+    run = commands.calls[0]
+    assert run[run.index("--memory") + 1] == run[run.index("--memory-swap") + 1] == "1g"
+    assert run[run.index("--ulimit") + 1] == "fsize=134217728:134217728"
+    assert run[run.index("--tmpfs") + 1] == "/tmp:rw,exec,nosuid,nodev,size=320m,mode=1777"
     sandbox.close()
 
 
@@ -175,6 +190,7 @@ def test_npm_install_and_version_inspection_precede_disconnect(
         "worksfr-check123-1",
         "npm",
         "install",
+        "--ignore-scripts",
         "--no-audit",
         "--no-fund",
         "lodash",
@@ -207,8 +223,13 @@ def test_invalid_npm_names_and_install_fallback(sandbox: DockerSandbox, commands
     env = sandbox.start([], npm_packages=["lodash", "missing", *invalid, "lodash"])
     assert env.npm_versions == {"lodash": "4.17.21"}
     assert env.failed_npm_packages == [*invalid, "missing"]
-    installs = [args[9:] for args in commands.calls if args[5:7] == ["npm", "install"]]
-    assert installs == [["lodash", "missing"], ["lodash"], ["missing"]]
+    installs = [args for args in commands.calls if args[5:7] == ["npm", "install"]]
+    assert all("--ignore-scripts" in args for args in installs)
+    assert [args[args.index("--no-fund") + 1 :] for args in installs] == [
+        ["lodash", "missing"],
+        ["lodash"],
+        ["missing"],
+    ]
     assert all(value not in args for args in commands.calls for value in invalid)
     sandbox.close()
 
@@ -314,8 +335,9 @@ def test_restart_installs_npm_pins_and_skips_failed(
     first = sandbox.start([], npm_packages=["@scope/name", "missing"])
     commands.calls.clear()
     sandbox.restart([])
-    installs = [args[9:] for args in commands.calls if args[5:7] == ["npm", "install"]]
-    assert installs == [["@scope/name@1.0.0-rc.1+build.2"]]
+    [install] = [args for args in commands.calls if args[5:7] == ["npm", "install"]]
+    assert "--ignore-scripts" in install
+    assert install[install.index("--no-fund") + 1 :] == ["@scope/name@1.0.0-rc.1+build.2"]
     assert not any("missing" in args for args in commands.calls)
     assert first.failed_npm_packages == ["missing"]
     sandbox.close()

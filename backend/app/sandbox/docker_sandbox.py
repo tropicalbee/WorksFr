@@ -140,7 +140,7 @@ class DockerSandbox:
         self, name: str, packages: list[str], baseline: Environment | None
     ) -> tuple[dict[str, str], list[str]]:
         command = ["docker", "exec", "-w", WORK_DIR, name]
-        install = [*command, "npm", "install", "--no-audit", "--no-fund"]
+        install = [*command, "npm", "install", "--ignore-scripts", "--no-audit", "--no-fund"]
         if baseline is None:
             valid, failed = [], []
             for package in dict.fromkeys(packages):
@@ -182,6 +182,7 @@ class DockerSandbox:
         self._generation += 1
         self._container = f"worksfr-{self._check_id}-{self._generation}"
         name = self._container
+        file_size_limit = self.settings.sandbox_file_size_mb * 1024 * 1024
         try:
             self._require_success(
                 self._run(
@@ -195,6 +196,12 @@ class DockerSandbox:
                         "worksfr=1",
                         "--memory",
                         self.settings.sandbox_memory,
+                        "--memory-swap",
+                        self.settings.sandbox_memory,
+                        "--ulimit",
+                        f"fsize={file_size_limit}:{file_size_limit}",
+                        "--tmpfs",
+                        f"/tmp:rw,exec,nosuid,nodev,size={self.settings.sandbox_tmpfs_mb}m,mode=1777",
                         "--cpus",
                         str(self.settings.sandbox_cpus),
                         "--pids-limit",

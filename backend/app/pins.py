@@ -52,11 +52,13 @@ def find_install_pins(
     blocks: Iterable[tuple[int, str]],
     versions: dict[str, str],
     *,
+    npm_versions: dict[str, str] | None = None,
     output_blocks: Iterable[tuple[int, str]] = (),
     packages: Iterable[str] = (),
 ) -> list[InstallPin]:
     """Read pip output only from explicitly supplied output blocks and tutorial packages."""
     installed = {normalize(name): version for name, version in versions.items()}
+    installed_npm = npm_versions or {}
     tutorial_packages = {normalize(package) for package in packages}
     pins: list[InstallPin] = []
     for idx, code in sorted(blocks, key=lambda block: block[0]):
@@ -79,7 +81,7 @@ def find_install_pins(
                         line=line.strip(),
                         package=package,
                         pinned=specifier,
-                        used=installed.get(package),
+                        used=installed_npm.get(package),
                         ecosystem="npm",
                     )
                 )

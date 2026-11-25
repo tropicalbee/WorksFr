@@ -2,13 +2,14 @@
 
 import asyncio
 import json
-from collections.abc import AsyncIterator
-from typing import Annotated, Literal
+from collections.abc import AsyncIterator, Callable, Coroutine
+from typing import Annotated, Any, Literal
 from uuid import uuid4
 
 import nbformat
 from fastapi import APIRouter, File, Header, HTTPException, Request, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
+from fastapi.routing import APIRoute
 from pydantic import BaseModel
 
 from app import storage
@@ -28,6 +29,8 @@ class URLSubmission(BaseModel):
 
 
 MAX_PASTE_CHARS = 200_000
+_NOTEBOOK_MULTIPART_ALLOWANCE = 16 * 1024
+_NOTEBOOK_UPLOAD_TOO_LARGE = "Notebook exceeds the upload size limit"
 
 
 class CodeSubmission(BaseModel):
@@ -98,16 +101,35 @@ def submit_code(body: CodeSubmission, request: Request) -> CheckCreated:
     return _submit(request, PastedCode(body.code, body.title, body.language or "auto"))
 
 
-@router.post("/checks/notebook", response_model=CheckCreated)
+def _notebook_byte_limit(request: Request) -> int:
+    return request.app.state.settings.max_upload_mb * 1024 * 1024
+
+
+class _NotebookUploadRoute(APIRoute):
+    def get_route_handler(self) -> Callable[[Request], Coroutine[Any, Any, Response]]:
+        handle = super().get_route_handler()
+
+        async def handle_upload(request: Request) -> Response:
+            try:
+                content_length = int(request.headers.get("content-length", "0"))
+            except ValueError:
+                content_length = 0
+            if content_length > _notebook_byte_limit(request) + _NOTEBOOK_MULTIPART_ALLOWANCE:
+                raise HTTPException(422, _NOTEBOOK_UPLOAD_TOO_LARGE)
+            return await handle(request)
+
+        return handle_upload
+
+
 async def submit_notebook(request: Request, file: Annotated[UploadFile, File()]) -> CheckCreated:
     try:
         if not file.filename or not file.filename.lower().endswith(".ipynb"):
             raise HTTPException(422, "Upload must be an .ipynb file")
-        limit = request.app.state.settings.max_upload_mb * 1024 * 1024
+        limit = _notebook_byte_limit(request)
         data = bytearray()
         while chunk := await file.read(65536):
             if len(data) + len(chunk) > limit:
-                raise HTTPException(422, "Notebook exceeds the upload size limit")
+                raise HTTPException(422, _NOTEBOOK_UPLOAD_TOO_LARGE)
             data.extend(chunk)
         try:
             notebook = nbformat.reads(data.decode("utf-8-sig"), as_version=4)
@@ -117,6 +139,15 @@ async def submit_notebook(request: Request, file: Annotated[UploadFile, File()])
         return _submit(request, (file.filename, bytes(data)))
     finally:
         await file.close()
+
+
+router.add_api_route(
+    "/checks/notebook",
+    submit_notebook,
+    methods=["POST"],
+    response_model=CheckCreated,
+    route_class_override=_NotebookUploadRoute,
+)
 
 
 @router.get("/checks", response_model=list[CheckReport])

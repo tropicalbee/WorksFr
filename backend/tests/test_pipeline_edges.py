@@ -7,6 +7,7 @@ from support.local_sandbox import LocalRunnerSandbox
 from test_pipeline import ROOT, Cache, Proposer, Sink
 
 from app.config import ProviderConfig, Settings
+from app.extract import PastedCode
 from app.labels import judge_patch, label_step
 from app.llm import LLMUnavailableError
 from app.models import Environment, ErrorInfo, ExecResult, Label, PatchVerdict, StepKind
@@ -139,6 +140,89 @@ def test_empty_and_non_runnable_pages(
         )
     assert sink.events[-1].type == "failed"
     assert sink.events[-1].error == message
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "SELECT * FROM users WHERE id = 1;",
+        "This is just a sentence about cooking pasta.",
+        'public class Hello { void say() { System.out.println("hello"); } }',
+        'fn main() { println!("hello"); }',
+        'echo "hello"',
+    ],
+)
+def test_unsupported_paste_has_clear_error_before_sandbox(code: str) -> None:
+    settings = Settings(_env_file=None, providers=[])
+    sink = Sink()
+
+    def never_start(_: str) -> None:
+        pytest.fail("Unsupported pasted code must not start a sandbox")
+
+    with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(404))) as http:
+        run_check(
+            "unsupported",
+            PastedCode(code),
+            PipelineDeps(settings, never_start, Proposer(), http, Cache()),
+            sink,
+        )
+    assert sink.events[-1].type == "failed"
+    assert sink.events[-1].error == "No Python, JavaScript, TypeScript, C or C++ code found."
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "```jsx\nfunction App() { return <div>Hello</div>; }\n```",
+        "```tsx\nconst App = () => <div />;\n```",
+        "```jsx\nconst score = 1;\n```",
+        "```tsx\nconst score: number = 1;\n```",
+        "```js\nfunction App() { return <div>Hello</div>; }\n```",
+        "```ts\nconst App = () => <div />;\n```",
+        "function App() { return <div>Hello</div>; }",
+        "const card = <div />;",
+    ],
+)
+def test_jsx_paste_is_reported_as_unverifiable_without_execution(code: str) -> None:
+    settings = Settings(_env_file=None, providers=[])
+    sandbox, sink = FakeSandbox(), Sink()
+    with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(404))) as http:
+        run_check(
+            "jsx",
+            PastedCode(code),
+            PipelineDeps(settings, lambda _: sandbox, Proposer(), http, Cache()),
+            sink,
+        )
+    assert sink.events[-1].type == "done"
+    final = next(event.step for event in sink.events if event.type == "step_final")
+    assert final.label == Label.CANT_VERIFY
+    assert final.reason == "JSX needs a build step, so this step wasn't run."
+    assert sandbox.exec_count == 0
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        '```js\nconst html = "<div>Hello</div>";\nconsole.log(html);\n```',
+        "```ts\nfunction identity<T>(x: T): T { return x; }\n```",
+        "```ts\nconst score = <number>42;\n```",
+        "```js\nconsole.log(0 < x && x > 2);\n```",
+    ],
+)
+def test_node_paste_without_jsx_reaches_sandbox(code: str) -> None:
+    settings = Settings(_env_file=None, providers=[])
+    sandbox, sink = FakeSandbox(), Sink()
+    with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(404))) as http:
+        run_check(
+            "node",
+            PastedCode(code),
+            PipelineDeps(settings, lambda _: sandbox, Proposer(), http, Cache()),
+            sink,
+        )
+    assert sink.events[-1].type == "done"
+    final = next(event.step for event in sink.events if event.type == "step_final")
+    assert final.label == Label.WORKS
+    assert sandbox.exec_count == 1
 
 
 def test_notebook_step_limit_before_sandbox() -> None:

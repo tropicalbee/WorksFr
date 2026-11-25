@@ -21,6 +21,7 @@ from packaging.version import InvalidVersion, Version
 from pydantic import BaseModel
 
 from app.config import Settings
+from app.extract.fetch import fetch_response
 from app.models import ErrorInfo, ExecResult, ProbeResult
 from app.packages import dist_for_import, normalize
 
@@ -34,6 +35,7 @@ MAX_PROBES = 3
 MAX_VERSION_PAGES = 8
 MAX_WARNINGS = 5
 FETCH_TIMEOUT = 15.0
+MAX_EVIDENCE_BYTES = 4 * 1024 * 1024
 TAVILY_URL = "https://api.tavily.com/search"
 
 EvidenceSource = Literal["error", "warning", "probe", "changelog", "search"]
@@ -270,13 +272,15 @@ def _fetch(
         cached = cache.get(url)
         if cached is not None:
             return cached
-        response = client.get(url, headers=headers, timeout=FETCH_TIMEOUT, follow_redirects=True)
+        response = fetch_response(
+            client, url, headers=headers, timeout=FETCH_TIMEOUT, max_bytes=MAX_EVIDENCE_BYTES
+        )
         response.raise_for_status()
         text = response.text
         cache.put(url, library, version, source, text)
         return text
     except Exception as exc:
-        logger.debug("evidence fetch failed for %s: %s", url, exc)
+        logger.debug("evidence fetch failed: %s", type(exc).__name__)
         return None
 
 

@@ -273,6 +273,14 @@ def test_precheck_unparseable_returns_none(code):
         (StepKind.C, "gets(buffer);"),
         (StepKind.C, "fgets(buffer, sizeof(buffer), stdin);"),
         (StepKind.CPP, "std::cin >> value;"),
+        (StepKind.C, 'fscanf(stdin, "%d", &n);'),
+        (StepKind.C, "int c = fgetc(stdin);"),
+        (StepKind.C, "int c = getc( stdin );"),
+        (StepKind.C, "ssize_t n = getline(&line, &size, stdin);"),
+        (StepKind.C, "fread(buffer, 1, sizeof(buffer), stdin);"),
+        (StepKind.CPP, "std::getline(std::cin, line);"),
+        (StepKind.CPP, "char c = std::cin.get();"),
+        (StepKind.CPP, "std::cin.getline(buffer, 80);"),
         (StepKind.JAVASCRIPT, 'const rl = require("node:readline/promises");'),
         (StepKind.JAVASCRIPT, "import { createInterface } from 'readline';"),
         (StepKind.TYPESCRIPT, "readline.createInterface(options);"),
@@ -294,6 +302,9 @@ def test_non_python_input_prechecks(kind: StepKind, code: str) -> None:
         (StepKind.C, "my_scanf(); has_getchar(); fgets(buffer, sizeof(buffer), file);"),
         (StepKind.C, "/* scanf(); */ puts(text); // getchar()"),
         (StepKind.CPP, "other_cin >> value;"),
+        (StepKind.C, 'fscanf(file, "%d", &n); sscanf(text, "%d", &n);'),
+        (StepKind.C, "int c = fgetc(file); getline(&line, &size, file);"),
+        (StepKind.CPP, "std::getline(file, line); std::cin.tie(nullptr);"),
         (StepKind.CPP, "const auto mask = 1 << 3; // std::cin >> mask"),
         (StepKind.JAVASCRIPT, 'console.log("readline", "process.stdin", "prompt(");'),
         (StepKind.TYPESCRIPT, "custom_readline(); $prompt(); process.stdinBackup;"),
@@ -390,3 +401,92 @@ def test_cascade_keeps_source_label(label: Label, reason: str) -> None:
     assert decision.label == label
     assert decision.reason == reason
     assert is_cascade(decision)
+
+
+@pytest.mark.parametrize("kind", [StepKind.C, StepKind.CPP])
+def test_quoted_local_include_is_cant_verify(kind: StepKind) -> None:
+    decision = precheck('#include <stdio.h>\n  # include "foo.h"\nint x;', kind=kind)
+    assert decision is not None
+    assert decision.label == CANT
+    assert decision.reason == "includes a local file, foo.h, that the tutorial doesn't show"
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        '#include "stdio.h"\nint x;',
+        '#include "vector"\nint x;',
+        '/* #include "foo.h" */\nint x;',
+        '// #include "foo.h"\nint x;',
+        'const char *text = "#include \\"foo.h\\"";',
+        "#include <foo.h>\nint x;",
+    ],
+)
+def test_quoted_include_lookalikes_do_not_hit_the_local_file_rule(code: str) -> None:
+    decision = precheck(code, kind=StepKind.CPP)
+    assert decision is None or "local file" not in decision.reason
+
+
+@pytest.mark.parametrize("kind", [StepKind.C, StepKind.CPP])
+def test_compile_only_result_is_cant_verify(kind: StepKind) -> None:
+    decision = label_step(ExecResult(id="s1", status="ok", result="compiled"), kind=kind)
+    assert decision.label == CANT
+    assert decision.reason == "Compiled without errors, but it has no main(), so nothing ran."
+    assert label_step(ExecResult(id="s1", status="ok"), kind=kind).label == Label.WORKS
+    python = label_step(ExecResult(id="s1", status="ok", result="compiled"))
+    assert python.label == Label.WORKS
+
+
+@pytest.mark.parametrize(
+    ("kind", "code", "expected"),
+    [
+        (StepKind.JAVASCRIPT, "const a = 1, b = 2;\nlet c;\nvar d;", {"a", "c", "d"}),
+        (StepKind.JAVASCRIPT, "async function load() {}\nclass Box {}", {"load", "Box"}),
+        (StepKind.JAVASCRIPT, "const { a, b: renamed, c = 3 } = obj;", {"a", "renamed", "c"}),
+        (StepKind.TYPESCRIPT, "const [first, second] = pair;", {"first", "second"}),
+        (
+            StepKind.JAVASCRIPT,
+            "import fs, { readFile as read, stat } from 'node:fs';",
+            {"fs", "read", "stat"},
+        ),
+        (StepKind.JAVASCRIPT, "import * as path from 'node:path';", {"path"}),
+        (StepKind.JAVASCRIPT, "/* const hidden = 1 */ const shown = '/*';", {"shown"}),
+        (StepKind.JAVASCRIPT, "console.log('const quoted = 1'); result.const = 1;", set()),
+        (StepKind.C, "static int value = 1;\nconst char *name = 0;", {"value", "name"}),
+        (StepKind.C, "int add(void) { int total = 0; return total; }", {"add", "total"}),
+        (StepKind.C, "return value;\nelse other;", set()),
+        (StepKind.CPP, "struct Point { int x; };\nclass Shape : Base {};", {"Point", "x", "Shape"}),
+        (StepKind.C, "#define LIMIT 10\n// int hidden = 1;", {"LIMIT"}),
+    ],
+)
+def test_declared_names(kind: StepKind, code: str, expected: set[str]) -> None:
+    from app.labels import declared_names
+
+    assert declared_names(code, kind) == expected
+
+
+@pytest.mark.parametrize(
+    ("kind", "etype", "message", "expected"),
+    [
+        (StepKind.JAVASCRIPT, "ReferenceError", "value is not defined", "value"),
+        (StepKind.TYPESCRIPT, "ReferenceError", "$x is not defined", "$x"),
+        (StepKind.JAVASCRIPT, "TypeError", "value is not defined", None),
+        (
+            StepKind.JAVASCRIPT,
+            "ReferenceError",
+            "Cannot access 'value' before initialization",
+            None,
+        ),
+        (StepKind.C, "CompileError", "a.c:2:3: error: \u2018value\u2019 undeclared", "value"),
+        (StepKind.CPP, "CompileError", "error: 'value' was not declared in this scope", "value"),
+        (StepKind.CPP, "CompileError", "error: \u2018Shape\u2019 does not name a type", "Shape"),
+        (StepKind.C, "CompileError", "error: unknown type name \u2018Point\u2019", "Point"),
+        (StepKind.C, "CompileError", "error: expected ';' before '}' token", None),
+        (StepKind.C, "ExitStatus", "\u2018value\u2019 undeclared", None),
+    ],
+)
+def test_missing_name(kind: StepKind, etype: str, message: str, expected: str | None) -> None:
+    from app.labels import missing_name
+
+    assert missing_name(err(etype, message).error, kind) == expected
+    assert missing_name(None, kind) is None

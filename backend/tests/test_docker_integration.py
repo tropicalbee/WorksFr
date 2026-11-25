@@ -205,16 +205,17 @@ def test_c_full_program_can_repeat_function_definition(sandbox: DockerSandbox) -
     definition = "int add(int a, int b) { return a + b; }"
     main = 'int main(void) { printf("%d\\n", add(20, 22)); }'
     program = f"#include <stdio.h>\n{definition}\n{main}"
+    # A definition with no main() only compiles, so it is Can't verify (ARCHITECTURE, Languages).
     steps = (
-        (definition, ""),
-        (program, "42"),
-        ('int main(void) { printf("%d\\n", add(20, 23)); }', "43"),
+        (definition, "", Label.CANT_VERIFY),
+        (program, "42", Label.WORKS),
+        ('int main(void) { printf("%d\\n", add(20, 23)); }', "43", Label.WORKS),
     )
     with CheckSession(sandbox, sandbox.settings) as session:
         session.start([])
-        for idx, (code, stdout) in enumerate(steps):
+        for idx, (code, stdout, label) in enumerate(steps):
             step = Step(Block(idx=idx, kind=StepKind.C, code=code, runnable_code=code))
-            assert session.run(step).label == Label.WORKS, step.result
+            assert session.run(step).label == label, step.result
             assert step.result is not None
             assert step.result.stdout.strip() == stdout
 

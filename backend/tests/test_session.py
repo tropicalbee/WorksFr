@@ -1,11 +1,12 @@
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 from support.local_sandbox import LocalRunnerSandbox
 
 from app.config import Settings
 from app.models import Block, Environment, ErrorInfo, ExecResult, Label, RepairAttempt, StepKind
-from app.sandbox.interface import SandboxError, StepTimeoutError
+from app.sandbox.interface import Sandbox, SandboxError, StepTimeoutError
 from app.session import CheckSession, CheckTimeoutError
 from app.step import Step
 
@@ -18,7 +19,7 @@ def step(idx: int, code: str, kind: StepKind = StepKind.PYTHON) -> Step:
 
 @pytest.fixture
 def session() -> CheckSession:
-    settings = Settings(_env_file=None, step_timeout_seconds=1)
+    settings = Settings(_env_file=None, step_timeout_seconds=5)
     sandbox = LocalRunnerSandbox(settings, runner_path=ROOT / "sandbox/runner.py")
     with CheckSession(sandbox, settings) as session:
         session.start([])
@@ -36,7 +37,7 @@ def test_persistence_and_precheck(session: CheckSession) -> None:
 
 def test_timeout_restarts_and_replays(session: CheckSession) -> None:
     session.run(step(0, "x = 42"))
-    assert session.run(step(1, "import time\ntime.sleep(10)")).label == Label.CANT_VERIFY
+    assert session.run(step(1, "import time\ntime.sleep(15)")).label == Label.CANT_VERIFY
     later = step(2, "x")
     session.run(later)
     assert later.result.result == "42"
@@ -162,7 +163,7 @@ def test_replay_carries_kinds_and_prechecks_do_not_run() -> None:
     ]
 
 
-def test_cascade_only_runs_for_python_kinds() -> None:
+def test_python_cascade_stays_isolated_from_other_languages() -> None:
     class FailingSandbox:
         def start(self, packages: list[str], npm_packages: list[str] | None = None) -> Environment:
             return Environment()
@@ -189,6 +190,121 @@ def test_cascade_only_runs_for_python_kinds() -> None:
 
 
 @pytest.mark.parametrize(
+    ("kind", "source", "dependent", "error", "source_label", "reason"),
+    [
+        (
+            StepKind.JAVASCRIPT,
+            "const value = missing();",
+            "console.log(value);",
+            ErrorInfo(type="ReferenceError", message="value is not defined"),
+            Label.BROKEN,
+            "is still broken",
+        ),
+        (
+            StepKind.TYPESCRIPT,
+            "const value: string = prompt();",
+            "console.log(value);",
+            ErrorInfo(type="ReferenceError", message="value is not defined"),
+            Label.CANT_VERIFY,
+            "couldn't be verified",
+        ),
+        (
+            StepKind.C,
+            "static int value = missing;",
+            "int main(void) { return value; }",
+            ErrorInfo(type="CompileError", message="step.c:2:3: error: ‘value’ undeclared"),
+            Label.BROKEN,
+            "is still broken",
+        ),
+        (
+            StepKind.CPP,
+            "int value() { return missing; }",
+            "int main() { return value(); }",
+            ErrorInfo(type="CompileError", message="error: 'value' was not declared in this scope"),
+            Label.BROKEN,
+            "is still broken",
+        ),
+    ],
+)
+def test_non_python_cascade_labels_dependents_unverifiable(
+    kind: StepKind,
+    source: str,
+    dependent: str,
+    error: ErrorInfo,
+    source_label: Label,
+    reason: str,
+) -> None:
+    sandbox = Mock(spec=Sandbox)
+    sandbox.start.return_value = Environment()
+    sandbox.exec.side_effect = [
+        *(
+            [ExecResult(id="s0", status="error", error=ErrorInfo(type="Error", message="oops"))]
+            if source_label == Label.BROKEN
+            else []
+        ),
+        ExecResult(id="s1", status="error", error=error),
+    ]
+    with CheckSession(sandbox, Settings(_env_file=None)) as session:
+        session.start([])
+        assert session.run(step(0, source, kind)).label == source_label
+        decision = session.run(step(1, dependent, kind))
+    assert decision.label == Label.CANT_VERIFY
+    assert decision.reason == f"depends on step 1, which {reason}"
+
+
+@pytest.mark.parametrize(
+    ("source", "dependent_kind", "error_type"),
+    [
+        ("const value = missing();", StepKind.TYPESCRIPT, "ReferenceError"),
+        ("const other = missing();", StepKind.JAVASCRIPT, "ReferenceError"),
+        ("/* const value = 1; */ missing();", StepKind.JAVASCRIPT, "ReferenceError"),
+        ("'const value = 1'; missing();", StepKind.JAVASCRIPT, "ReferenceError"),
+        ("const value = missing();", StepKind.JAVASCRIPT, "TypeError"),
+    ],
+)
+def test_non_python_cascade_requires_a_matching_error_and_declaration(
+    source: str, dependent_kind: StepKind, error_type: str
+) -> None:
+    sandbox = Mock(spec=Sandbox)
+    sandbox.start.return_value = Environment()
+    sandbox.exec.side_effect = [
+        ExecResult(id="s0", status="error", error=ErrorInfo(type="Error", message="oops")),
+        ExecResult(
+            id="s1",
+            status="error",
+            error=ErrorInfo(type=error_type, message="value is not defined"),
+        ),
+    ]
+    with CheckSession(sandbox, Settings(_env_file=None)) as session:
+        session.start([])
+        assert session.run(step(0, source, StepKind.JAVASCRIPT)).label == Label.BROKEN
+        decision = session.run(step(1, "console.log(value);", dependent_kind))
+    assert decision.label == Label.BROKEN
+    assert decision.reason == f"{error_type}: value is not defined"
+
+
+def test_compiled_native_step_clears_missing_binding_and_stays_in_ledger() -> None:
+    source = "int value = 1;"
+    kind = StepKind.C
+    failure = ErrorInfo(type="CompileError", message="error: 'value' undeclared")
+    sandbox = Mock(spec=Sandbox)
+    sandbox.start.return_value = Environment()
+    sandbox.exec.side_effect = [
+        ExecResult(id="s0", status="error", error=failure),
+        ExecResult(id="s1", status="ok", result="compiled"),
+        ExecResult(id="s2", status="error", error=failure),
+    ]
+    with CheckSession(sandbox, Settings(_env_file=None)) as session:
+        session.start([])
+        assert session.run(step(0, "int value = missing;", kind)).label == Label.BROKEN
+        session.run(step(1, source, kind))
+        assert session.ledger == [(1, kind, source)]
+        decision = session.run(step(2, "int main(void) { return value; }", kind))
+    assert decision.label == Label.BROKEN
+    assert "undeclared" in decision.reason
+
+
+@pytest.mark.parametrize(
     "source",
     [
         "train_data = open('missing-cascade-data.csv').read()",
@@ -204,3 +320,43 @@ def test_unverified_source_and_transitive_dependents(session: CheckSession, sour
     transitive = session.run(step(2, "print(processed)"))
     assert transitive.label == Label.CANT_VERIFY
     assert transitive.reason == "depends on step 2, which couldn't be verified"
+
+
+@pytest.mark.parametrize("kind", [StepKind.C, StepKind.CPP])
+def test_compile_only_step_is_cant_verify_but_stays_in_ledger(kind: StepKind) -> None:
+    source = "int value(void) { return 42; }"
+    sandbox = Mock(spec=Sandbox)
+    sandbox.start.return_value = Environment()
+    sandbox.exec.side_effect = [
+        ExecResult(id="s0", status="ok", result="compiled"),
+        ExecResult(id="s1", status="ok"),
+    ]
+    with CheckSession(sandbox, Settings(_env_file=None)) as session:
+        session.start([])
+        decision = session.run(step(0, source, kind))
+        assert decision.label == Label.CANT_VERIFY
+        assert decision.reason == "Compiled without errors, but it has no main(), so nothing ran."
+        assert session.ledger == [(0, kind, source)]
+        later = session.run(step(1, "int main(void) { return value() == 42 ? 0 : 1; }", kind))
+    assert later.label == Label.WORKS
+
+
+def test_non_python_cascade_is_limited_to_names_a_failed_step_declares() -> None:
+    sandbox = Mock(spec=Sandbox)
+    sandbox.start.return_value = Environment()
+    reference = ErrorInfo(type="ReferenceError", message="total is not defined")
+    sandbox.exec.side_effect = [
+        ExecResult(id="s0", status="error", error=ErrorInfo(type="Error", message="oops")),
+        ExecResult(id="s1", status="ok"),
+        ExecResult(id="s2", status="error", error=reference),
+        ExecResult(id="s3", status="error", error=reference),
+    ]
+    with CheckSession(sandbox, Settings(_env_file=None)) as session:
+        session.start([])
+        kind = StepKind.JAVASCRIPT
+        assert session.run(step(0, "const total = missing();", kind)).label == Label.BROKEN
+        # A later successful step that declares the name again ends the dependency.
+        assert session.run(step(1, "const total = 1;", kind)).label == Label.WORKS
+        assert session.run(step(2, "console.log(total);", kind)).label == Label.BROKEN
+        # Without a failed step that declares the name there is no cascade at all.
+        assert session.run(step(3, "console.log(total);", kind)).label == Label.BROKEN

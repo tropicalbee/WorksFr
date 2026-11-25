@@ -4,9 +4,12 @@ from datetime import date, datetime
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
 from app.broker import Broker
-from app.events import EnvironmentEvent
+from app.config import Settings
+from app.events import EnvironmentEvent, FailedEvent
+from app.main import create_app
 from app.models import (
     CheckReport,
     CheckStatus,
@@ -248,6 +251,50 @@ def test_update_and_finished_timestamp(database: str, status: CheckStatus) -> No
     assert datetime.fromisoformat(finished).utcoffset().total_seconds() == 0
     update_check(database, "c1")
     assert get_report(database, "c1") == loaded
+
+
+def test_startup_records_failure_for_interrupted_checks(database: str) -> None:
+    for check_id in ("running", "queued"):
+        create_check(database, report(check_id).model_copy(update={"status": CheckStatus.RUNNING}))
+    with sqlite3.connect(database) as connection:
+        connection.execute("UPDATE checks SET status='queued' WHERE id='queued'")
+
+    running = get_report(database, "running")
+    assert running is not None
+    environment = EnvironmentEvent(
+        versions=running.versions, failed_packages=running.failed_packages
+    )
+    append_event(database, "running", environment.type, environment.model_dump_json())
+    for status in (CheckStatus.DONE, CheckStatus.FAILED):
+        create_check(database, report(status).model_copy(update={"status": status}))
+    finished = {status: get_report(database, status) for status in ("done", "failed")}
+
+    error = "The check stopped because the server restarted. Run it again."
+    app = create_app(Settings(_env_file=None, database_path=database, providers=[]))
+    with TestClient(app) as client:
+        for check_id in ("running", "queued"):
+            response = client.get(f"/api/checks/{check_id}")
+            assert response.status_code == 200
+            recovered = CheckReport.model_validate(response.json())
+            assert recovered.status == CheckStatus.FAILED
+            assert recovered.error == error
+            assert recovered.steps == running.steps
+        replay = client.get("/api/checks/running/events", headers={"Last-Event-ID": "1"})
+        assert replay.text == (
+            f"id: 2\nevent: failed\ndata: {FailedEvent(error=error).model_dump_json()}\n\n"
+        )
+
+    assert {status: get_report(database, status) for status in finished} == finished
+    with TestClient(app):
+        running_events = [kind for _, kind, _ in list_events(database, "running")]
+        assert running_events == ["environment", "failed"]
+        assert [kind for _, kind, _ in list_events(database, "queued")] == ["failed"]
+    with sqlite3.connect(database) as connection:
+        recovered_count = connection.execute(
+            "SELECT COUNT(*) FROM checks WHERE id IN ('running', 'queued') "
+            "AND finished_at IS NOT NULL"
+        ).fetchone()[0]
+    assert recovered_count == 2
 
 
 def test_unknown_and_recent_order_limit(database: str) -> None:

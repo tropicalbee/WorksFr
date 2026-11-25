@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 import httpx
 import pytest
 
@@ -62,9 +64,32 @@ def test_stream_cap_stops_reading(monkeypatch: pytest.MonkeyPatch) -> None:
                 consumed.append(1)
                 yield b"x" * 16
 
-    with httpx.Client(
-        transport=httpx.MockTransport(lambda _: httpx.Response(200, stream=Body()))
-    ) as client:
+    extensions = {"network_stream": Mock(get_extra_info=lambda _: ("93.184.216.34", 443))}
+    transport = httpx.MockTransport(
+        lambda _: httpx.Response(200, stream=Body(), extensions=extensions)
+    )
+    with httpx.Client(transport=transport) as client:
         with pytest.raises(ExtractionError, match="larger"):
             fetch.fetch_url(client, "https://public.test", max_bytes=20)
     assert len(consumed) == 2
+
+
+@pytest.mark.parametrize("peer", [("10.0.0.1", 443), ("1.1.1.1", 443), None])
+def test_fetch_checks_peer_before_reading_body(
+    peer: tuple[str, int] | None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(fetch, "resolve_host", lambda _: ["93.184.216.34"])
+    read = Mock(return_value=iter([b"content"]))
+
+    class Body(httpx.SyncByteStream):
+        def __iter__(self):
+            return read()
+
+    extensions = {"network_stream": Mock(get_extra_info=lambda _: peer)}
+    transport = httpx.MockTransport(
+        lambda _: httpx.Response(200, stream=Body(), extensions=extensions)
+    )
+    with httpx.Client(transport=transport) as client:
+        with pytest.raises(ExtractionError, match="peer address"):
+            fetch.fetch_url(client, "https://public.test")
+    read.assert_not_called()

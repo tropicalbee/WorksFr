@@ -1,7 +1,9 @@
 """Tests for repair evidence gathering. Network, sandbox and cache are all fakes."""
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
+from unittest.mock import Mock
 
 import httpx
 import pytest
@@ -19,12 +21,18 @@ from app.repair.evidence import (
     RENDER_CAP,
     Evidence,
     EvidenceItem,
+    _fetch,
     _snippets,
     changelog_evidence,
     gather,
     plan_probes,
     search_evidence,
 )
+
+
+@pytest.fixture(autouse=True)
+def stub_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.extract.fetch.resolve_host", lambda _: ["93.184.216.34"])
 
 
 def tb(line: int) -> str:
@@ -158,6 +166,77 @@ def test_probe_unparseable_code_does_not_raise() -> None:
 
 
 # changelog_evidence
+
+
+def test_fetch_rejects_private_dns_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.extract.fetch.resolve_host", lambda _: ["10.0.0.1"])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        pytest.fail(f"Private DNS result reached the HTTP transport: {request.url}")
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        assert (
+            _fetch("https://docs.example/changes", client, MemCache(), "widget", None, "changelog")
+            is None
+        )
+
+
+def test_fetch_rejects_redirect_to_private_dns_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    start = "https://docs.example/changes"
+    redirect = "https://other.example/changes"
+    monkeypatch.setattr(
+        "app.extract.fetch.resolve_host",
+        lambda host: ["10.0.0.1"] if host == "other.example" else ["93.184.216.34"],
+    )
+    requests: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(str(request.url))
+        if str(request.url) == start:
+            return httpx.Response(302, headers={"Location": redirect})
+        pytest.fail(f"Redirect with private DNS result reached the HTTP transport: {request.url}")
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        assert _fetch(start, client, MemCache(), "widget", None, "changelog") is None
+    assert requests == [start]
+
+
+def test_fetch_stops_streaming_at_size_limit() -> None:
+    consumed = []
+
+    class LargePage(httpx.SyncByteStream):
+        def __iter__(self) -> Iterator[bytes]:
+            consumed.append(4 * 1024 * 1024)
+            yield b"x" * (4 * 1024 * 1024)
+            consumed.append(1)
+            yield b"x"
+            pytest.fail("Evidence fetch continued reading after exceeding its size limit")
+
+    cache = MemCache()
+    extensions = {"network_stream": Mock(get_extra_info=lambda _: ("93.184.216.34", 443))}
+    transport = httpx.MockTransport(
+        lambda _: httpx.Response(200, stream=LargePage(), extensions=extensions)
+    )
+    with httpx.Client(transport=transport) as client:
+        assert (
+            _fetch("https://docs.example/changes", client, cache, "widget", None, "changelog")
+            is None
+        )
+    assert cache.data == {}
+    assert consumed == [4 * 1024 * 1024, 1]
+
+
+def test_fetch_caches_text_decoded_with_response_charset() -> None:
+    url = "https://docs.example/changes"
+    cache = MemCache()
+    transport = httpx.MockTransport(
+        lambda _: httpx.Response(
+            200, content=b"Caf\xe9", headers={"Content-Type": "text/plain; charset=iso-8859-1"}
+        )
+    )
+    with httpx.Client(transport=transport) as client:
+        assert _fetch(url, client, cache, "widget", None, "changelog") == "Café"
+    assert cache.get(url) == "Café"
 
 
 PYPI = {

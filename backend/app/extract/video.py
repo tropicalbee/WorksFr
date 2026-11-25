@@ -1,6 +1,7 @@
 """Transcribe public video clips by URL; recovered code is never executed here."""
 
 import json
+import logging
 import re
 import time
 from collections.abc import Callable
@@ -17,6 +18,8 @@ from app.llm.pacing import PacingState, WaitCallback, pace, retry_after, wait
 from app.models import Block, Extraction, SourceFormat, SourceKind, StepKind, is_runnable
 from scripts.capture_video_reply import MISSING_CONFIG, PROMPT
 
+logger = logging.getLogger(__name__)
+
 VideoKind = Literal["python", "javascript", "typescript", "c", "cpp", "shell", "output", "file"]
 _CODE_KINDS = {"python", "javascript", "typescript", "c", "cpp"}
 
@@ -24,8 +27,6 @@ PRIVATE_VIDEO = (
     "This video isn't public, so it can't be read. Upload the notebook or paste the code instead."
 )
 NO_CODE = "No code was visible in this video."
-QUOTA_EXCEEDED = "The video reader's quota is used up for now. Try again later."
-_BUSY_STATUSES = (500, 502, 503, 504)
 _BUSY_WAITS = (5.0, 15.0)
 
 _KEY_PATTERN = re.compile(
@@ -58,6 +59,11 @@ class VideoBlock(BaseModel):
 
 class VideoReply(BaseModel):
     blocks: list[VideoBlock]
+
+
+class _VideoModelUnavailable(Exception):
+    def __init__(self, status_code: int) -> None:
+        self.status_code = status_code
 
 
 class _Content(BaseModel):
@@ -242,7 +248,14 @@ class VideoReader:
         self._pacing = PacingState("video", settings.video_reader_min_interval_seconds)
 
     def _chunk(
-        self, url: str, start: int, end: int, on_wait: WaitCallback | None
+        self,
+        url: str,
+        start: int,
+        end: int,
+        on_wait: WaitCallback | None,
+        *,
+        model: str,
+        retry_quota: bool,
     ) -> VideoReply | None:
         settings = self._settings
         key = settings.video_reader_api_key.get_secret_value()
@@ -256,7 +269,7 @@ class VideoReader:
                     response = self._http.post(
                         settings.video_reader_base_url.rstrip("/") + "/interactions",
                         headers={"x-goog-api-key": key},
-                        json=_request_body(url, settings.video_reader_model, start, end, prompt),
+                        json=_request_body(url, model, start, end, prompt),
                         timeout=300,
                         follow_redirects=False,
                     )
@@ -264,31 +277,30 @@ class VideoReader:
                     raise ExtractionError(
                         f"The video reader request failed ({type(exc).__name__})."
                     ) from None
-                if response.status_code in _BUSY_STATUSES and busy_retries < len(_BUSY_WAITS):
-                    # The model is briefly overloaded; a short wait usually clears it.
+                if response.is_server_error:
+                    if busy_retries == len(_BUSY_WAITS):
+                        raise _VideoModelUnavailable(response.status_code)
                     wait("video", _BUSY_WAITS[busy_retries], on_wait, self._sleep)
                     busy_retries += 1
                     continue
                 if response.status_code != 429:
                     break
                 seconds = retry_after(response.headers.get("Retry-After", ""))
-                if retried_rate_limit or seconds > settings.llm_max_wait_seconds:
-                    raise ExtractionError(QUOTA_EXCEEDED)
+                if not retry_quota or retried_rate_limit or seconds > settings.llm_max_wait_seconds:
+                    raise _VideoModelUnavailable(429)
                 retried_rate_limit = True
                 wait("video", seconds, on_wait, self._sleep)
             if response.status_code in (400, 403) and start == 0:
                 raise ExtractionError(PRIVATE_VIDEO)
             if response.status_code == 400:
                 try:
-                    error = response.json().get("error", {})
-                    # Past the end of the video. The Interactions API sends `code`, not `status`.
-                    is_end = isinstance(error, dict) and (
-                        error.get("status") == "INVALID_ARGUMENT"
-                        or error.get("code") == "invalid_request"
-                    )
-                except (ValueError, AttributeError):
-                    is_end = False
-                if is_end:
+                    message = response.json()["error"]["message"]
+                except (ValueError, KeyError, TypeError):
+                    message = None
+                if (
+                    isinstance(message, str)
+                    and "the file or media data is empty" in message.casefold()
+                ):
                     return None
             if response.status_code != 200:
                 raise ExtractionError(
@@ -309,12 +321,50 @@ class VideoReader:
                 )
         raise AssertionError("Unreachable video parsing state")
 
+    def _read_chunk(
+        self, url: str, start: int, end: int, on_wait: WaitCallback | None, model_index: int
+    ) -> tuple[VideoReply | None, int]:
+        models = self._settings.video_reader_models
+        for index in range(model_index, len(models)):
+            try:
+                reply = self._chunk(
+                    url, start, end, on_wait, model=models[index], retry_quota=len(models) == 1
+                )
+            except _VideoModelUnavailable as exc:
+                status = exc.status_code
+            else:
+                return reply, index
+
+            key = self._settings.video_reader_api_key.get_secret_value()
+            if index + 1 < len(models):
+                reason = "quota used" if status == 429 else f"overloaded (HTTP {status})"
+                logger.info(
+                    "video reader: %s %s, switching to %s",
+                    redact_code(models[index], key),
+                    reason,
+                    redact_code(models[index + 1], key),
+                )
+                continue
+
+            tried = ", ".join(redact_code(model, key) for model in models)
+            if status == 429:
+                raise ExtractionError(
+                    f"Gemini, which reads the video, has used up its free quota (tried: {tried}). "
+                    "This is a limit on Google's side, not a problem with your link. "
+                    "It resets daily; try again later, or check a written tutorial."
+                )
+            raise ExtractionError(
+                f"Gemini, which reads the video, is overloaded right now "
+                f"(HTTP {status}; tried: {tried}). This is on Google's side, "
+                "not a problem with your link. Try again in a few minutes."
+            )
+        raise AssertionError("No video model is configured for this chunk")
+
     def extract(self, url: str, *, on_wait: WaitCallback | None = None) -> Extraction:
         settings = self._settings
         key = settings.video_reader_api_key.get_secret_value()
-        if not all(
-            value.strip()
-            for value in (settings.video_reader_base_url, key, settings.video_reader_model)
+        if not (
+            settings.video_reader_base_url.strip() and key.strip() and settings.video_reader_models
         ):
             raise ExtractionError(MISSING_CONFIG)
         route = route_url(url)
@@ -324,11 +374,12 @@ class VideoReader:
         reads = settings.video_reads
         recovered: list[list[VideoBlock]] = [[] for _ in range(reads)]
         cap = settings.video_max_minutes * 60
+        model_index = 0
         for start in range(0, cap, settings.video_chunk_seconds):
             end = min(start + settings.video_chunk_seconds, cap)
             finished = False
             for number in range(reads):
-                reply = self._chunk(url, start, end, on_wait)
+                reply, model_index = self._read_chunk(url, start, end, on_wait, model_index)
                 if reply is None:
                     finished = True
                     break
