@@ -1,0 +1,171 @@
+{
+  "id": "1caef9fe0efe4e5e8d6f69dabdf5e408",
+  "source_kind": "url",
+  "source": "https://qiita.com/yamii/items/914fcae6599a4ac9f9fd",
+  "title": "PythonでOpenAI APIを実行する方法 #ChatGPT - Qiita",
+  "published": "2023-04-16",
+  "date_source": "page",
+  "status": "done",
+  "created_at": "2026-11-25T18:14:01.907220+00:00",
+  "score": {
+    "works": 0,
+    "deprecated": 0,
+    "broken": 1,
+    "cant_verify": 0,
+    "fixed": 0,
+    "fixed_unverified": 1,
+    "still_run": 0,
+    "checked": 1,
+    "ratio": 0.0
+  },
+  "versions": {
+    "openai": "3.59.0"
+  },
+  "failed_packages": [],
+  "install_pins": [],
+  "steps": [
+    {
+      "idx": 0,
+      "kind": "output",
+      "original_code": "Python 3.10.4\npip 22.3.1",
+      "final_code": "Python 3.10.4\npip 22.3.1",
+      "label": null,
+      "reason": "",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 1,
+      "kind": "shell",
+      "original_code": "pip install openai",
+      "final_code": "pip install openai",
+      "label": null,
+      "reason": "",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 2,
+      "kind": "python",
+      "original_code": "import openai\n\nopenai.api_key = '[発行したAPIKEY]'\n\nresponse = openai.ChatCompletion.create(\n                model=\"gpt-3.5-turbo\",\n                messages=[\n                {'role': 'user', 'content': 'ハローワールド！！'}],\n                temperature=0.0,\n)\n\nprint(response['choices'][0]['message']['content'])",
+      "final_code": "import os\nfrom openai import OpenAI\n\nclient = OpenAI(api_key=os.environ.get(\"OPENAI_API_KEY\"))\n\nresponse = client.chat.completions.create(\n    model=\"gpt-3.5-turbo\",\n    messages=[\n        {\"role\": \"user\", \"content\": \"ハローワールド！！\"}\n    ],\n    temperature=0.0,\n)\n\nprint(response.choices[0].message.content)",
+      "label": "broken",
+      "reason": "APIRemovedInV1: \n\nYou tried to access openai.ChatCompletion, but this is no longer supported in openai>=1.0.0 - see the README at https://github.com/openai/openai-python for the API.\n\nYou can run `openai migrate` to automatically upgrade your codebase to use the 1.0.0 interface. \n\nAlternatively, you can pin your installation to the old version, e.g. `pip install openai==0.28`\n\nA detailed migration guide is available here: https://github.com/openai/openai-python/discussions/742\n",
+      "verdict": "fixed_unverified",
+      "repair_attempts": [
+        {
+          "attempt": 1,
+          "patched_code": "from openai import OpenAI\n\nclient = OpenAI(api_key='[発行したAPIKEY]')\n\nresponse = client.chat.completions.create(\n    model=\"gpt-3.5-turbo\",\n    messages=[\n        {'role': 'user', 'content': 'ハローワールド！！'}\n    ],\n    temperature=0.0,\n)\n\nprint(response.choices[0].message.content)",
+          "explanation": "Migrated from the removed legacy `openai.ChatCompletion` namespace to the v1.x `OpenAI` client interface required by openai>=1.0.0. The API key is now passed to `OpenAI(api_key=...)`, chat completions are invoked via `client.chat.completions.create(...)`, and the generated text is read with attribute access (`response.choices[0].message.content`) instead of dictionary subscripting.",
+          "apis_changed": [
+            "openai.api_key",
+            "openai.ChatCompletion.create",
+            "response['choices'][0]['message']['content']"
+          ],
+          "provider": "nvidia",
+          "result": {
+            "id": "s2-a1",
+            "status": "error",
+            "stdout": "",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": {
+              "type": "UnicodeEncodeError",
+              "message": "'ascii' codec can't encode characters in position 8-11: ordinal not in range(128)",
+              "traceback": "Traceback (most recent call last):\n  File \"<step-s2-a1>\", line 5, in <module>\n  File \"/opt/venv/lib/python3.12/site-packages/openai/_utils/_utils.py\", line 298, in wrapper\n    return func(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/openai/resources/chat/completions/completions.py\", line 1614, in create\n    return self._post(\n           ^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/openai/_base_client.py\", line 1474, in post\n    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))\n                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/openai/_base_client.py\", line 1164, in request\n    request = self._build_request(options, retries_taken=retries_taken)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/openai/_base_client.py\", line 622, in _build_request\n    headers = self._build_headers(options, retries_taken=retries_taken)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/openai/_base_client.py\", line 542, in _build_headers\n    headers = httpx2.Headers(headers_dict)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/httpx2/_models.py\", line 172, in __init__\n    bytes_value = _normalize_header_value(v, encoding)\n                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/httpx2/_models.py\", line 98, in _normalize_header_value\n    return value.encode(encoding or \"ascii\")\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nUnicodeEncodeError: 'ascii' codec can't encode characters in position 8-11: ordinal not in range(128)\n"
+            },
+            "duration_ms": 1394
+          },
+          "decision": {
+            "label": "broken",
+            "reason": "UnicodeEncodeError: 'ascii' codec can't encode characters in position 8-11: ordinal not in range(128)"
+          },
+          "verdict": "failed"
+        },
+        {
+          "attempt": 2,
+          "patched_code": "import os\nfrom openai import OpenAI\n\nclient = OpenAI(api_key=os.environ.get(\"OPENAI_API_KEY\"))\n\nresponse = client.chat.completions.create(\n    model=\"gpt-3.5-turbo\",\n    messages=[\n        {\"role\": \"user\", \"content\": \"ハローワールド！！\"}\n    ],\n    temperature=0.0,\n)\n\nprint(response.choices[0].message.content)",
+          "explanation": "Migrated from the removed openai.ChatCompletion namespace to the openai>=1.0.0 OpenAI client interface using client.chat.completions.create. The hardcoded API key contained non-ASCII Japanese characters, which caused UnicodeEncodeError when building request headers; it is now read from the OPENAI_API_KEY environment variable so header values remain ASCII-compatible.",
+          "apis_changed": [
+            "openai.ChatCompletion.create",
+            "openai.OpenAI",
+            "client.chat.completions.create"
+          ],
+          "provider": "nvidia",
+          "result": {
+            "id": "s2-a2",
+            "status": "error",
+            "stdout": "",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": {
+              "type": "APIConnectionError",
+              "message": "Connection error.",
+              "traceback": "Traceback (most recent call last):\n  File \"/opt/venv/lib/python3.12/site-packages/httpx2/_transports/default.py\", line 95, in map_httpcore_exceptions\n    yield\n  File \"/opt/venv/lib/python3.12/site-packages/httpx2/_transports/default.py\", line 242, in handle_request\n    resp = self._pool.handle_request(req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/httpcore2/_sync/connection_pool.py\", line 243, in handle_request\n    raise exc from None\n  File \"/opt/venv/lib/python3.12/site-packages/httpcore2/_sync/connection_pool.py\", line 225, in handle_request\n    response = connection.handle_request(pool_request.request)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/httpcore2/_sync/connection.py\", line 96, in handle_request\n    raise exc\n  File \"/opt/venv/lib/python3.12/site-packages/httpcore2/_sync/connection.py\", line 76, in handle_request\n    stream = self._connect(request)\n             ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/httpcore2/_sync/connection.py\", line 119, in _connect\n    stream = self._network_backend.connect_tcp(**kwargs)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/httpcore2/_backends/sync.py\", line 204, in connect_tcp\n    with map_exceptions(exc_map):\n         ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/contextlib.py\", line 158, in __exit__\n    self.gen.throw(value)\n  File \"/opt/venv/lib/python3.12/site-packages/httpcore2/_exceptions.py\", line 16, in map_exceptions\n    raise to_exc(exc) from exc\nhttpcore2.ConnectError: [Errno -3] Temporary failure in name resolution\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/opt/venv/lib/python3.12/site-packages/openai/_base_client.py\", line 1183, in request\n    response = self._send_request(\n               ^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/openai/_client.py\", line 211, in _send_request\n    return sync_send_request(self, request, stream=stream, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/openai/lib/_client_auth.py\", line 328, in sync_send_request\n    response = self._send_with_auth_retry(request, stream=stream, **kwargs)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/openai/_client.py\", line 197, in _send_with_auth_retry\n    return sync_send_with_auth_retry(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/openai/lib/_client_auth.py\", line 313, in sync_send_with_auth_retry\n    response = super(_owner, self)._send_request(request, stream=stream, **kwargs)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/openai/_base_client.py\", line 1104, in _send_request\n    return self._client.send(request, stream=stream, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/httpx2/_client.py\", line 974, in send\n    response = self._send_handling_auth(\n               ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/httpx2/_client.py\", line 1002, in _send_handling_auth\n    response = self._send_handling_redirects(\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/httpx2/_client.py\", line 1037, in _send_handling_redirects\n    response = self._send_single_request(request)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/httpx2/_client.py\", line 1070, in _send_single_request\n    response = transport.handle_request(request)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/httpx2/_transports/default.py\", line 241, in handle_request\n    with map_httpcore_exceptions():\n         ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/contextlib.py\", line 158, in __exit__\n    self.gen.throw(value)\n  File \"/opt/venv/lib/python3.12/site-packages/httpx2/_transports/default.py\", line 112, in map_httpcore_exceptions\n    raise mapped_exc(message) from exc\nhttpx2.ConnectError: [Errno -3] Temporary failure in name resolution\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"<step-s2-a2>\", line 6, in <module>\n  File \"/opt/venv/lib/python3.12/site-packages/openai/_utils/_utils.py\", line 298, in wrapper\n    return func(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/openai/resources/chat/completions/completions.py\", line 1614, in create\n    return self._post(\n           ^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/openai/_base_client.py\", line 1474, in post\n    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))\n                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/openai/_base_client.py\", line 1218, in request\n    raise APIConnectionError(request=request) from err\nopenai.APIConnectionError: Connection error.\n"
+            },
+            "duration_ms": 2903
+          },
+          "decision": {
+            "label": "cant_verify",
+            "reason": "needs network access"
+          },
+          "verdict": "fixed_unverified"
+        }
+      ],
+      "explanation": "Migrated from the removed openai.ChatCompletion namespace to the openai>=1.0.0 OpenAI client interface using client.chat.completions.create. The hardcoded API key contained non-ASCII Japanese characters, which caused UnicodeEncodeError when building request headers; it is now read from the OPENAI_API_KEY environment variable so header values remain ASCII-compatible.",
+      "apis_changed": [
+        "openai.ChatCompletion.create",
+        "openai.OpenAI",
+        "client.chat.completions.create"
+      ],
+      "output": "",
+      "error": {
+        "type": "APIConnectionError",
+        "message": "Connection error.",
+        "traceback": "Traceback (most recent call last):\n  File \"/opt/venv/lib/python3.12/site-packages/httpx2/_transports/default.py\", line 95, in map_httpcore_exceptions\n    yield\n  File \"/opt/venv/lib/python3.12/site-packages/httpx2/_transports/default.py\", line 242, in handle_request\n    resp = self._pool.handle_request(req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/httpcore2/_sync/connection_pool.py\", line 243, in handle_request\n    raise exc from None\n  File \"/opt/venv/lib/python3.12/site-packages/httpcore2/_sync/connection_pool.py\", line 225, in handle_request\n    response = connection.handle_request(pool_request.request)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/httpcore2/_sync/connection.py\", line 96, in handle_request\n    raise exc\n  File \"/opt/venv/lib/python3.12/site-packages/httpcore2/_sync/connection.py\", line 76, in handle_request\n    stream = self._connect(request)\n             ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/httpcore2/_sync/connection.py\", line 119, in _connect\n    stream = self._network_backend.connect_tcp(**kwargs)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/httpcore2/_backends/sync.py\", line 204, in connect_tcp\n    with map_exceptions(exc_map):\n         ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/contextlib.py\", line 158, in __exit__\n    self.gen.throw(value)\n  File \"/opt/venv/lib/python3.12/site-packages/httpcore2/_exceptions.py\", line 16, in map_exceptions\n    raise to_exc(exc) from exc\nhttpcore2.ConnectError: [Errno -3] Temporary failure in name resolution\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/opt/venv/lib/python3.12/site-packages/openai/_base_client.py\", line 1183, in request\n    response = self._send_request(\n               ^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/openai/_client.py\", line 211, in _send_request\n    return sync_send_request(self, request, stream=stream, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/openai/lib/_client_auth.py\", line 328, in sync_send_request\n    response = self._send_with_auth_retry(request, stream=stream, **kwargs)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/openai/_client.py\", line 197, in _send_with_auth_retry\n    return sync_send_with_auth_retry(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/openai/lib/_client_auth.py\", line 313, in sync_send_with_auth_retry\n    response = super(_owner, self)._send_request(request, stream=stream, **kwargs)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/openai/_base_client.py\", line 1104, in _send_request\n    return self._client.send(request, stream=stream, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/httpx2/_client.py\", line 974, in send\n    response = self._send_handling_auth(\n               ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/httpx2/_client.py\", line 1002, in _send_handling_auth\n    response = self._send_handling_redirects(\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/httpx2/_client.py\", line 1037, in _send_handling_redirects\n    response = self._send_single_request(request)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/httpx2/_client.py\", line 1070, in _send_single_request\n    response = transport.handle_request(request)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/httpx2/_transports/default.py\", line 241, in handle_request\n    with map_httpcore_exceptions():\n         ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/contextlib.py\", line 158, in __exit__\n    self.gen.throw(value)\n  File \"/opt/venv/lib/python3.12/site-packages/httpx2/_transports/default.py\", line 112, in map_httpcore_exceptions\n    raise mapped_exc(message) from exc\nhttpx2.ConnectError: [Errno -3] Temporary failure in name resolution\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"<step-s2-a2>\", line 6, in <module>\n  File \"/opt/venv/lib/python3.12/site-packages/openai/_utils/_utils.py\", line 298, in wrapper\n    return func(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/openai/resources/chat/completions/completions.py\", line 1614, in create\n    return self._post(\n           ^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/openai/_base_client.py\", line 1474, in post\n    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))\n                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/openai/_base_client.py\", line 1218, in request\n    raise APIConnectionError(request=request) from err\nopenai.APIConnectionError: Connection error.\n"
+      },
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 3,
+      "kind": "output",
+      "original_code": "こんにちは、私はAIアシスタントです。どうかお気軽にお話ししてください。",
+      "final_code": "こんにちは、私はAIアシスタントです。どうかお気軽にお話ししてください。",
+      "label": null,
+      "reason": "",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    }
+  ],
+  "error": null,
+  "showcase_label": "Qiita: OpenAI ChatCompletion"
+}

@@ -1,13 +1,396 @@
 [
   {
-    "id": "dd6d02204c5f4d539d12e310ebc53467",
+    "id": "10debc221f9e471c9e88085bbadb70da",
+    "source_kind": "url",
+    "source": "https://stackoverflow.com/a/77292230",
+    "title": "OpenAI API error: \"Module 'openai' has no attribute 'ChatCompletion', did you mean 'Completion'?\"",
+    "published": "2023-10-14",
+    "date_source": "page",
+    "status": "done",
+    "created_at": "2026-11-25T18:24:00.256439+00:00",
+    "score": {
+      "works": 0,
+      "deprecated": 0,
+      "broken": 1,
+      "cant_verify": 0,
+      "fixed": 0,
+      "fixed_unverified": 1,
+      "still_run": 0,
+      "checked": 1,
+      "ratio": 0.0
+    },
+    "versions": {
+      "openai": "3.59.0"
+    },
+    "failed_packages": [],
+    "install_pins": [],
+    "steps": [],
+    "error": null,
+    "showcase_label": "Stack Overflow: openai ChatCompletion answer"
+  },
+  {
+    "id": "d69d0eccb0da48fd962cd979c195b152",
+    "source_kind": "url",
+    "source": "https://github.com/openai/openai-cookbook/blob/main/examples/How_to_stream_completions.ipynb",
+    "title": "How to stream completions",
+    "published": null,
+    "date_source": "unknown",
+    "status": "done",
+    "created_at": "2026-11-25T18:23:19.927512+00:00",
+    "score": {
+      "works": 2,
+      "deprecated": 0,
+      "broken": 0,
+      "cant_verify": 5,
+      "fixed": 0,
+      "fixed_unverified": 0,
+      "still_run": 2,
+      "checked": 2,
+      "ratio": 1.0
+    },
+    "versions": {
+      "openai": "3.59.0"
+    },
+    "failed_packages": [],
+    "install_pins": [],
+    "steps": [],
+    "error": null,
+    "showcase_label": "OpenAI Cookbook: streaming completions"
+  },
+  {
+    "id": "ad27c7c8bb3246609a95083be0c4f398",
+    "source_kind": "url",
+    "source": "https://github.com/jakevdp/PythonDataScienceHandbook/blob/master/notebooks/03.06-Concat-And-Append.ipynb",
+    "title": "Combining Datasets: concat and append",
+    "published": null,
+    "date_source": "unknown",
+    "status": "done",
+    "created_at": "2026-11-25T18:22:19.002445+00:00",
+    "score": {
+      "works": 15,
+      "deprecated": 0,
+      "broken": 1,
+      "cant_verify": 0,
+      "fixed": 1,
+      "fixed_unverified": 0,
+      "still_run": 15,
+      "checked": 16,
+      "ratio": 0.9375
+    },
+    "versions": {
+      "numpy": "2.5.5",
+      "pandas": "3.1.1"
+    },
+    "failed_packages": [],
+    "install_pins": [],
+    "steps": [],
+    "error": null,
+    "showcase_label": "Python Data Science Handbook: concat and append"
+  },
+  {
+    "id": "1605f1bcb2204dffac81eb67083101c8",
+    "source_kind": "url",
+    "source": "https://www.cnblogs.com/LXP-Never/p/10008693.html",
+    "title": "TensorFlow 1入门教程 - 凌逆战 - 博客园",
+    "published": "2019-01-14",
+    "date_source": "page",
+    "status": "done",
+    "created_at": "2026-11-25T18:19:27.263491+00:00",
+    "score": {
+      "works": 10,
+      "deprecated": 0,
+      "broken": 32,
+      "cant_verify": 0,
+      "fixed": 12,
+      "fixed_unverified": 0,
+      "still_run": 10,
+      "checked": 42,
+      "ratio": 0.23809523809523808
+    },
+    "versions": {},
+    "failed_packages": [
+      "tensorflow"
+    ],
+    "install_pins": [],
+    "steps": [],
+    "error": null,
+    "showcase_label": "cnblogs: TensorFlow intro"
+  },
+  {
+    "id": "7b9ee2ab20b8449a8575d7d8686e0ca9",
+    "source_kind": "url",
+    "source": "https://trading-for-chicken.tistory.com/92",
+    "title": "Pandas DataFrame 09-05. 행 추가 (append) :: 알고리즘 트레이딩을 위한 파이썬 라이브러리 학습장",
+    "published": "2022-01-23",
+    "date_source": "page",
+    "status": "done",
+    "created_at": "2026-11-25T18:16:33.170435+00:00",
+    "score": {
+      "works": 2,
+      "deprecated": 0,
+      "broken": 6,
+      "cant_verify": 0,
+      "fixed": 6,
+      "fixed_unverified": 0,
+      "still_run": 2,
+      "checked": 8,
+      "ratio": 0.25
+    },
+    "versions": {},
+    "failed_packages": [],
+    "install_pins": [],
+    "steps": [],
+    "error": null,
+    "showcase_label": "Tistory: pandas append"
+  },
+  {
+    "id": "1caef9fe0efe4e5e8d6f69dabdf5e408",
+    "source_kind": "url",
+    "source": "https://qiita.com/yamii/items/914fcae6599a4ac9f9fd",
+    "title": "PythonでOpenAI APIを実行する方法 #ChatGPT - Qiita",
+    "published": "2023-04-16",
+    "date_source": "page",
+    "status": "done",
+    "created_at": "2026-11-25T18:14:01.907220+00:00",
+    "score": {
+      "works": 0,
+      "deprecated": 0,
+      "broken": 1,
+      "cant_verify": 0,
+      "fixed": 0,
+      "fixed_unverified": 1,
+      "still_run": 0,
+      "checked": 1,
+      "ratio": 0.0
+    },
+    "versions": {
+      "openai": "3.59.0"
+    },
+    "failed_packages": [],
+    "install_pins": [],
+    "steps": [],
+    "error": null,
+    "showcase_label": "Qiita: OpenAI ChatCompletion"
+  },
+  {
+    "id": "5e83b305e8014feea5a1d8992f1e70bd",
+    "source_kind": "url",
+    "source": "https://zenn.dev/alivelimb/articles/20220430-pandas-beginner",
+    "title": "pandas初級者に送りたいTips",
+    "published": "2022-04-30",
+    "date_source": "page",
+    "status": "done",
+    "created_at": "2026-11-25T18:08:29.406729+00:00",
+    "score": {
+      "works": 26,
+      "deprecated": 0,
+      "broken": 10,
+      "cant_verify": 1,
+      "fixed": 9,
+      "fixed_unverified": 0,
+      "still_run": 26,
+      "checked": 36,
+      "ratio": 0.7222222222222222
+    },
+    "versions": {
+      "numpy": "2.5.5",
+      "pandarallel": "1.6.5",
+      "pandas": "3.1.1",
+      "pandera": "0.36.0"
+    },
+    "failed_packages": [],
+    "install_pins": [],
+    "steps": [],
+    "error": null,
+    "showcase_label": "Zenn: pandas for beginners"
+  },
+  {
+    "id": "97907024b9fd4181b0579e7cbe9ec4ca",
+    "source_kind": "url",
+    "source": "https://habr.com/ru/companies/ods/articles/322626/",
+    "title": "Открытый курс машинного обучения. Тема 1. Первичный анализ данных с Pandas / Хабр",
+    "published": "2017-02-28",
+    "date_source": "page",
+    "status": "done",
+    "created_at": "2026-11-25T18:06:58.537509+00:00",
+    "score": {
+      "works": 2,
+      "deprecated": 0,
+      "broken": 1,
+      "cant_verify": 34,
+      "fixed": 0,
+      "fixed_unverified": 1,
+      "still_run": 2,
+      "checked": 3,
+      "ratio": 0.6666666666666666
+    },
+    "versions": {
+      "numpy": "2.5.5",
+      "pandas": "3.1.1"
+    },
+    "failed_packages": [],
+    "install_pins": [],
+    "steps": [],
+    "error": null,
+    "showcase_label": "Habr ODS course, topic 1: pandas"
+  },
+  {
+    "id": "624546eeeda94487b11c589ef8a0f03e",
+    "source_kind": "url",
+    "source": "https://www.tutorialspoint.com/article/how-to-append-two-dataframes-in-pandas",
+    "title": "How to append two DataFrames in Pandas?",
+    "published": "2026-03-26",
+    "date_source": "page",
+    "status": "done",
+    "created_at": "2026-11-25T18:05:24.981536+00:00",
+    "score": {
+      "works": 1,
+      "deprecated": 0,
+      "broken": 2,
+      "cant_verify": 0,
+      "fixed": 2,
+      "fixed_unverified": 0,
+      "still_run": 1,
+      "checked": 3,
+      "ratio": 0.3333333333333333
+    },
+    "versions": {
+      "pandas": "3.1.1"
+    },
+    "failed_packages": [],
+    "install_pins": [],
+    "steps": [],
+    "error": null,
+    "showcase_label": "Tutorialspoint: append two DataFrames"
+  },
+  {
+    "id": "c8ab6aec8cfe4f34812f1ea9dc6f2428",
+    "source_kind": "paste",
+    "source": "Pasted code",
+    "title": "sklearn RMSE with root_mean_squared_error",
+    "published": null,
+    "date_source": "unknown",
+    "status": "done",
+    "created_at": "2026-11-25T18:02:49.005107+00:00",
+    "score": {
+      "works": 3,
+      "deprecated": 0,
+      "broken": 0,
+      "cant_verify": 0,
+      "fixed": 0,
+      "fixed_unverified": 0,
+      "still_run": 3,
+      "checked": 3,
+      "ratio": 1.0
+    },
+    "versions": {
+      "numpy": "2.5.5",
+      "scikit-learn": "1.9.1"
+    },
+    "failed_packages": [],
+    "install_pins": [],
+    "steps": [],
+    "error": null,
+    "showcase_label": "Claude Code (Haiku) via MCP: its root_mean_squared_error replacement"
+  },
+  {
+    "id": "d1bf5ddd918c42139d9d5abbe0ebf88b",
+    "source_kind": "url",
+    "source": "https://www.freecodecamp.org/news/the-ultimate-guide-to-the-pandas-library-for-data-science-in-python/",
+    "title": "The Ultimate Guide to the Pandas Library for Data Science in Python",
+    "published": "2020-07-08",
+    "date_source": "page",
+    "status": "done",
+    "created_at": "2026-11-25T18:02:38.276577+00:00",
+    "score": {
+      "works": 60,
+      "deprecated": 0,
+      "broken": 10,
+      "cant_verify": 11,
+      "fixed": 10,
+      "fixed_unverified": 0,
+      "still_run": 60,
+      "checked": 70,
+      "ratio": 0.8571428571428571
+    },
+    "versions": {
+      "numpy": "2.5.5",
+      "pandas": "3.1.1"
+    },
+    "failed_packages": [],
+    "install_pins": [],
+    "steps": [],
+    "error": null,
+    "showcase_label": "freeCodeCamp: ultimate guide to pandas"
+  },
+  {
+    "id": "fbbe4ac885314585bec5c3d984487a03",
+    "source_kind": "paste",
+    "source": "Pasted code",
+    "title": "sklearn RMSE with np.sqrt",
+    "published": null,
+    "date_source": "unknown",
+    "status": "done",
+    "created_at": "2026-11-25T18:01:08.573364+00:00",
+    "score": {
+      "works": 3,
+      "deprecated": 0,
+      "broken": 0,
+      "cant_verify": 0,
+      "fixed": 0,
+      "fixed_unverified": 0,
+      "still_run": 3,
+      "checked": 3,
+      "ratio": 1.0
+    },
+    "versions": {
+      "numpy": "2.5.5",
+      "scikit-learn": "1.9.1"
+    },
+    "failed_packages": [],
+    "install_pins": [],
+    "steps": [],
+    "error": null,
+    "showcase_label": "Claude Code (Haiku) via MCP: its np.sqrt replacement"
+  },
+  {
+    "id": "83b633af0f77436aab1adc6477a9cde7",
+    "source_kind": "url",
+    "source": "https://www.geeksforgeeks.org/python/append-data-to-an-empty-pandas-dataframe/",
+    "title": "Append data to an empty Pandas DataFrame - GeeksforGeeks",
+    "published": "2020-08-12",
+    "date_source": "page",
+    "status": "done",
+    "created_at": "2026-11-25T17:59:45.743089+00:00",
+    "score": {
+      "works": 1,
+      "deprecated": 0,
+      "broken": 5,
+      "cant_verify": 0,
+      "fixed": 5,
+      "fixed_unverified": 0,
+      "still_run": 1,
+      "checked": 6,
+      "ratio": 0.16666666666666666
+    },
+    "versions": {
+      "pandas": "3.1.1"
+    },
+    "failed_packages": [],
+    "install_pins": [],
+    "steps": [],
+    "error": null,
+    "showcase_label": "GeeksforGeeks: append to an empty DataFrame"
+  },
+  {
+    "id": "31850927692f4f21b317bee8a572e094",
     "source_kind": "url",
     "source": "https://www.geeksforgeeks.org/python-pandas-dataframe-append/",
     "title": "Python - Pandas dataframe.append() - GeeksforGeeks",
     "published": "2018-11-20",
     "date_source": "page",
     "status": "done",
-    "created_at": "2026-11-25T08:05:53.295433+00:00",
+    "created_at": "2026-11-25T17:59:45.683433+00:00",
     "score": {
       "works": 0,
       "deprecated": 0,
@@ -29,10 +412,40 @@
     "showcase_label": "GeeksforGeeks: pandas append"
   },
   {
+    "id": "36857b3f28a746de8b64493e2a715ea3",
+    "source_kind": "paste",
+    "source": "Pasted code",
+    "title": "sklearn RMSE tutorial snippet",
+    "published": null,
+    "date_source": "unknown",
+    "status": "done",
+    "created_at": "2026-11-25T17:58:16.439965+00:00",
+    "score": {
+      "works": 2,
+      "deprecated": 0,
+      "broken": 1,
+      "cant_verify": 0,
+      "fixed": 1,
+      "fixed_unverified": 0,
+      "still_run": 2,
+      "checked": 3,
+      "ratio": 0.6666666666666666
+    },
+    "versions": {
+      "numpy": "2.5.5",
+      "scikit-learn": "1.9.1"
+    },
+    "failed_packages": [],
+    "install_pins": [],
+    "steps": [],
+    "error": null,
+    "showcase_label": "Claude Code (Haiku) via MCP: RMSE snippet"
+  },
+  {
     "id": "154f8713010747368a674e004bb69d88",
     "source_kind": "url",
     "source": "https://www.youtube.com/watch?v=_zN8QziXjd8",
-    "title": null,
+    "title": "Pandas Tutorial #3: Appending to a DataFrame",
     "published": null,
     "date_source": "unknown",
     "status": "done",
@@ -55,89 +468,6 @@
     "install_pins": [],
     "steps": [],
     "error": null,
-    "showcase_label": "YouTube: pandas video tutorial"
-  },
-  {
-    "id": "744f9bd26a5e457bb63113d7f7e1fce7",
-    "source_kind": "url",
-    "source": "https://stackoverflow.com/a/77292230",
-    "title": "OpenAI API error: \"Module 'openai' has no attribute 'ChatCompletion', did you mean 'Completion'?\"",
-    "published": "2023-10-14",
-    "date_source": "page",
-    "status": "done",
-    "created_at": "2026-11-24T16:59:25.590714+00:00",
-    "score": {
-      "works": 0,
-      "deprecated": 0,
-      "broken": 1,
-      "cant_verify": 0,
-      "fixed": 0,
-      "fixed_unverified": 1,
-      "still_run": 0,
-      "checked": 1,
-      "ratio": 0.0
-    },
-    "versions": {
-      "openai": "3.58.0"
-    },
-    "failed_packages": [],
-    "install_pins": [],
-    "steps": [],
-    "error": null,
-    "showcase_label": "Stack Overflow: OpenAI API answer"
-  },
-  {
-    "id": "875f76454aba47fd9cb2cdef62a3df0f",
-    "source_kind": "paste",
-    "source": "Pasted code",
-    "title": "lodash live",
-    "published": null,
-    "date_source": "unknown",
-    "status": "done",
-    "created_at": "2026-11-24T21:24:25.850332+00:00",
-    "score": {
-      "works": 2,
-      "deprecated": 1,
-      "broken": 0,
-      "cant_verify": 0,
-      "fixed": 0,
-      "fixed_unverified": 0,
-      "still_run": 3,
-      "checked": 3,
-      "ratio": 1.0
-    },
-    "versions": {},
-    "failed_packages": [],
-    "install_pins": [],
-    "steps": [],
-    "error": null,
-    "showcase_label": "JavaScript paste: lodash and Buffer"
-  },
-  {
-    "id": "82ff793d397644e78b35f213e1024da7",
-    "source_kind": "paste",
-    "source": "Pasted code",
-    "title": "C live 2",
-    "published": null,
-    "date_source": "unknown",
-    "status": "done",
-    "created_at": "2026-11-24T21:26:33.081778+00:00",
-    "score": {
-      "works": 4,
-      "deprecated": 0,
-      "broken": 0,
-      "cant_verify": 0,
-      "fixed": 0,
-      "fixed_unverified": 0,
-      "still_run": 4,
-      "checked": 4,
-      "ratio": 1.0
-    },
-    "versions": {},
-    "failed_packages": [],
-    "install_pins": [],
-    "steps": [],
-    "error": null,
-    "showcase_label": "C paste"
+    "showcase_label": "YouTube: pandas append video tutorial"
   }
 ]

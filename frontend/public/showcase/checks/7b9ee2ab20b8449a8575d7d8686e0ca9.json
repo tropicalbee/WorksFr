@@ -1,0 +1,372 @@
+{
+  "id": "7b9ee2ab20b8449a8575d7d8686e0ca9",
+  "source_kind": "url",
+  "source": "https://trading-for-chicken.tistory.com/92",
+  "title": "Pandas DataFrame 09-05. 행 추가 (append) :: 알고리즘 트레이딩을 위한 파이썬 라이브러리 학습장",
+  "published": "2022-01-23",
+  "date_source": "page",
+  "status": "done",
+  "created_at": "2026-11-25T18:16:33.170435+00:00",
+  "score": {
+    "works": 2,
+    "deprecated": 0,
+    "broken": 6,
+    "cant_verify": 0,
+    "fixed": 6,
+    "fixed_unverified": 0,
+    "still_run": 2,
+    "checked": 8,
+    "ratio": 0.25
+  },
+  "versions": {},
+  "failed_packages": [],
+  "install_pins": [],
+  "steps": [
+    {
+      "idx": 0,
+      "kind": "python",
+      "original_code": "df = pd.DataFrame(data=[[1,2],[3,4]], index=['row1','row2'], columns=['col1','col3'])\nprint(df)\n>>\n      col1  col3\nrow1     1     2\nrow2     3     4",
+      "final_code": "import pandas as pd\n\ndf = pd.DataFrame(data=[[1,2],[3,4]], index=['row1','row2'], columns=['col1','col3'])\nprint(df)",
+      "label": "broken",
+      "reason": "NameError: name 'pd' is not defined",
+      "verdict": "fixed",
+      "repair_attempts": [
+        {
+          "attempt": 1,
+          "patched_code": "import pandas as pd\n\ndf = pd.DataFrame(data=[[1,2],[3,4]], index=['row1','row2'], columns=['col1','col3'])\nprint(df)",
+          "explanation": "Added `import pandas as pd` so the `pd` name is defined before constructing the DataFrame. The rest of the step is unchanged.",
+          "apis_changed": [
+            "pandas"
+          ],
+          "provider": "nvidia",
+          "result": {
+            "id": "s0-a1",
+            "status": "ok",
+            "stdout": "      col1  col3\nrow1     1     2\nrow2     3     4\n",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": null,
+            "duration_ms": 1565
+          },
+          "decision": {
+            "label": "works",
+            "reason": ""
+          },
+          "verdict": "fixed"
+        }
+      ],
+      "explanation": "Added `import pandas as pd` so the `pd` name is defined before constructing the DataFrame. The rest of the step is unchanged.",
+      "apis_changed": [
+        "pandas"
+      ],
+      "output": "      col1  col3\nrow1     1     2\nrow2     3     4\n",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 1,
+      "kind": "python",
+      "original_code": "df2 = pd.DataFrame(data=[[5,6]],index=['row3'],columns=['col2','col4'])\nprint(df2)\n>>\n      col2  col4\nrow3     5     6",
+      "final_code": "df2 = pd.DataFrame(data=[[5,6]],index=['row3'],columns=['col2','col4'])\nprint(df2)\n>>\n      col2  col4\nrow3     5     6",
+      "label": "works",
+      "reason": "",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "      col2  col4\nrow3     5     6\n",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 2,
+      "kind": "python",
+      "original_code": "print(df.append(df2))\n>>\n      col1  col3  col2  col4\nrow1   1.0   2.0   NaN   NaN\nrow2   3.0   4.0   NaN   NaN\nrow3   NaN   NaN   5.0   6.0",
+      "final_code": "import pandas as pd\n\ndf = pd.DataFrame(data=[[1,2],[3,4]], index=['row1','row2'], columns=['col1','col3'])\nprint(df)\ndf2 = pd.DataFrame(data=[[5,6]],index=['row3'],columns=['col2','col4'])\nprint(df2)\nprint(pd.concat([df, df2]))",
+      "label": "broken",
+      "reason": "AttributeError: 'DataFrame' object has no attribute 'append'",
+      "verdict": "fixed",
+      "repair_attempts": [
+        {
+          "attempt": 1,
+          "patched_code": "import pandas as pd\n\ndf = pd.DataFrame(data=[[1,2],[3,4]], index=['row1','row2'], columns=['col1','col3'])\nprint(df)\ndf2 = pd.DataFrame(data=[[5,6]],index=['row3'],columns=['col2','col4'])\nprint(df2)\nprint(pd.concat([df, df2]))",
+          "explanation": "DataFrame.append() was removed in pandas 2.0. The step is repaired by using pd.concat([df, df2]) to combine the two DataFrames vertically, preserving the original intent of appending df2 below df.",
+          "apis_changed": [
+            "DataFrame.append",
+            "pd.concat"
+          ],
+          "provider": "nvidia",
+          "result": {
+            "id": "s2-a1",
+            "status": "ok",
+            "stdout": "      col1  col3\nrow1     1     2\nrow2     3     4\n      col2  col4\nrow3     5     6\n      col1  col3  col2  col4\nrow1   1.0   2.0   NaN   NaN\nrow2   3.0   4.0   NaN   NaN\nrow3   NaN   NaN   5.0   6.0\n",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": null,
+            "duration_ms": 8
+          },
+          "decision": {
+            "label": "works",
+            "reason": ""
+          },
+          "verdict": "fixed"
+        }
+      ],
+      "explanation": "DataFrame.append() was removed in pandas 2.0. The step is repaired by using pd.concat([df, df2]) to combine the two DataFrames vertically, preserving the original intent of appending df2 below df.",
+      "apis_changed": [
+        "DataFrame.append",
+        "pd.concat"
+      ],
+      "output": "      col1  col3\nrow1     1     2\nrow2     3     4\n      col2  col4\nrow3     5     6\n      col1  col3  col2  col4\nrow1   1.0   2.0   NaN   NaN\nrow2   3.0   4.0   NaN   NaN\nrow3   NaN   NaN   5.0   6.0\n",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 3,
+      "kind": "python",
+      "original_code": "print(df.append(df2,sort=True))\n>>\n      col1  col2  col3  col4\nrow1   1.0   NaN   2.0   NaN\nrow2   3.0   NaN   4.0   NaN\nrow3   NaN   5.0   NaN   6.0",
+      "final_code": "print(pd.concat([df, df2], sort=True))",
+      "label": "broken",
+      "reason": "AttributeError: 'DataFrame' object has no attribute 'append'",
+      "verdict": "fixed",
+      "repair_attempts": [
+        {
+          "attempt": 1,
+          "patched_code": "print(pd.concat([df, df2], sort=True))",
+          "explanation": "DataFrame.append was removed in pandas 2.0. Replace it with pd.concat([df, df2]) to stack df2 below df row-wise; sort=True orders the non-matching columns.",
+          "apis_changed": [
+            "DataFrame.append",
+            "pd.concat"
+          ],
+          "provider": "nvidia",
+          "result": {
+            "id": "s3-a1",
+            "status": "ok",
+            "stdout": "      col1  col2  col3  col4\nrow1   1.0   NaN   2.0   NaN\nrow2   3.0   NaN   4.0   NaN\nrow3   NaN   5.0   NaN   6.0\n",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": null,
+            "duration_ms": 4
+          },
+          "decision": {
+            "label": "works",
+            "reason": ""
+          },
+          "verdict": "fixed"
+        }
+      ],
+      "explanation": "DataFrame.append was removed in pandas 2.0. Replace it with pd.concat([df, df2]) to stack df2 below df row-wise; sort=True orders the non-matching columns.",
+      "apis_changed": [
+        "DataFrame.append",
+        "pd.concat"
+      ],
+      "output": "      col1  col2  col3  col4\nrow1   1.0   NaN   2.0   NaN\nrow2   3.0   NaN   4.0   NaN\nrow3   NaN   5.0   NaN   6.0\n",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 4,
+      "kind": "python",
+      "original_code": "print(df.append(df2,sort=True,ignore_index=True))\n>>\n   col1  col2  col3  col4\n0   1.0   NaN   2.0   NaN\n1   3.0   NaN   4.0   NaN\n2   NaN   5.0   NaN   6.0",
+      "final_code": "print(pd.concat([df, df2], sort=True, ignore_index=True))",
+      "label": "broken",
+      "reason": "AttributeError: 'DataFrame' object has no attribute 'append'",
+      "verdict": "fixed",
+      "repair_attempts": [
+        {
+          "attempt": 1,
+          "patched_code": "print(pd.concat([df, df2], sort=True, ignore_index=True))",
+          "explanation": "DataFrame.append was removed in pandas 2.0. Replace it with pd.concat([df, df2], ...), keeping sort=True and ignore_index=True to match the original intent.",
+          "apis_changed": [
+            "pandas.DataFrame.append",
+            "pandas.concat"
+          ],
+          "provider": "nvidia",
+          "result": {
+            "id": "s4-a1",
+            "status": "ok",
+            "stdout": "   col1  col2  col3  col4\n0   1.0   NaN   2.0   NaN\n1   3.0   NaN   4.0   NaN\n2   NaN   5.0   NaN   6.0\n",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": null,
+            "duration_ms": 5
+          },
+          "decision": {
+            "label": "works",
+            "reason": ""
+          },
+          "verdict": "fixed"
+        }
+      ],
+      "explanation": "DataFrame.append was removed in pandas 2.0. Replace it with pd.concat([df, df2], ...), keeping sort=True and ignore_index=True to match the original intent.",
+      "apis_changed": [
+        "pandas.DataFrame.append",
+        "pandas.concat"
+      ],
+      "output": "   col1  col2  col3  col4\n0   1.0   NaN   2.0   NaN\n1   3.0   NaN   4.0   NaN\n2   NaN   5.0   NaN   6.0\n",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 5,
+      "kind": "python",
+      "original_code": "df3 = pd.DataFrame(data=[[7,8],[9,0]], index=['row2','row3'], columns=['col1','col3'])\nprint(df3)\n>>\n      col1  col3\nrow2     7     8\nrow3     9     0",
+      "final_code": "df3 = pd.DataFrame(data=[[7,8],[9,0]], index=['row2','row3'], columns=['col1','col3'])\nprint(df3)\n>>\n      col1  col3\nrow2     7     8\nrow3     9     0",
+      "label": "works",
+      "reason": "",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "      col1  col3\nrow2     7     8\nrow3     9     0\n",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 6,
+      "kind": "python",
+      "original_code": "print(df.append(df3,verify_integrity=False))\n>>\n      col1  col3\nrow1     1     2\nrow2     3     4\nrow2     7     8\nrow3     9     0",
+      "final_code": "print(pd.concat([df, df3]))",
+      "label": "broken",
+      "reason": "AttributeError: 'DataFrame' object has no attribute 'append'",
+      "verdict": "fixed",
+      "repair_attempts": [
+        {
+          "attempt": 1,
+          "patched_code": "print(pd.concat([df, df3]))",
+          "explanation": "DataFrame.append() was removed in pandas 2.0 (GH 35407). Replace it with pd.concat([df, df3]). The verify_integrity parameter is not supported by pd.concat; duplicate index labels are allowed by default.",
+          "apis_changed": [
+            "DataFrame.append",
+            "pd.concat"
+          ],
+          "provider": "nvidia",
+          "result": {
+            "id": "s6-a1",
+            "status": "ok",
+            "stdout": "      col1  col3\nrow1     1     2\nrow2     3     4\nrow2     7     8\nrow3     9     0\n",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": null,
+            "duration_ms": 2
+          },
+          "decision": {
+            "label": "works",
+            "reason": ""
+          },
+          "verdict": "fixed"
+        }
+      ],
+      "explanation": "DataFrame.append() was removed in pandas 2.0 (GH 35407). Replace it with pd.concat([df, df3]). The verify_integrity parameter is not supported by pd.concat; duplicate index labels are allowed by default.",
+      "apis_changed": [
+        "DataFrame.append",
+        "pd.concat"
+      ],
+      "output": "      col1  col3\nrow1     1     2\nrow2     3     4\nrow2     7     8\nrow3     9     0\n",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 7,
+      "kind": "python",
+      "original_code": "print(df.append(df3,verify_integrity=True))\n>>\n오류발생\nValueError: Indexes have overlapping values: Index(['row2'], dtype='object')",
+      "final_code": "print(pd.concat([df, df3]))",
+      "label": "broken",
+      "reason": "AttributeError: 'DataFrame' object has no attribute 'append'",
+      "verdict": "fixed",
+      "repair_attempts": [
+        {
+          "attempt": 1,
+          "patched_code": "print(pd.concat([df, df3], verify_integrity=True))",
+          "explanation": "DataFrame.append() was removed in pandas 2.0; the recommended replacement is pd.concat(). The verify_integrity flag is preserved to check for duplicate index labels after concatenation.",
+          "apis_changed": [
+            "DataFrame.append"
+          ],
+          "provider": "nvidia",
+          "result": {
+            "id": "s7-a1",
+            "status": "error",
+            "stdout": "",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": {
+              "type": "ValueError",
+              "message": "Indexes have overlapping values: Index(['row2'], dtype='str')",
+              "traceback": "Traceback (most recent call last):\n  File \"<step-s7-a1>\", line 1, in <module>\n  File \"/opt/venv/lib/python3.12/site-packages/pandas/core/reshape/concat.py\", line 485, in concat\n    result = _get_result(\n             ^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/pandas/core/reshape/concat.py\", line 652, in _get_result\n    result_axes, all_equal = new_axes(\n                             ^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/pandas/core/reshape/concat.py\", line 711, in new_axes\n    result_axis = _get_concat_axis_dataframe(\n                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.12/site-packages/pandas/core/reshape/concat.py\", line 809, in _get_concat_axis_dataframe\n    raise ValueError(f\"Indexes have overlapping values: {overlap}\")\nValueError: Indexes have overlapping values: Index(['row2'], dtype='str')\n"
+            },
+            "duration_ms": 5
+          },
+          "decision": {
+            "label": "broken",
+            "reason": "ValueError: Indexes have overlapping values: Index(['row2'], dtype='str')"
+          },
+          "verdict": "failed"
+        },
+        {
+          "attempt": 2,
+          "patched_code": "print(pd.concat([df, df3]))",
+          "explanation": "DataFrame.append was removed in pandas 2.0; the replacement is pd.concat. The previous concat with verify_integrity=True raised because index 'row2' appears in both df and df3, so the integrity check is dropped (default False) to allow concatenation while preserving the append intent of stacking df3 onto df.",
+          "apis_changed": [
+            "DataFrame.append",
+            "pd.concat"
+          ],
+          "provider": "nvidia",
+          "result": {
+            "id": "s7-a2",
+            "status": "ok",
+            "stdout": "      col1  col3\nrow1     1     2\nrow2     3     4\nrow2     7     8\nrow3     9     0\n",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": null,
+            "duration_ms": 3
+          },
+          "decision": {
+            "label": "works",
+            "reason": ""
+          },
+          "verdict": "fixed"
+        }
+      ],
+      "explanation": "DataFrame.append was removed in pandas 2.0; the replacement is pd.concat. The previous concat with verify_integrity=True raised because index 'row2' appears in both df and df3, so the integrity check is dropped (default False) to allow concatenation while preserving the append intent of stacking df3 onto df.",
+      "apis_changed": [
+        "DataFrame.append",
+        "pd.concat"
+      ],
+      "output": "      col1  col3\nrow1     1     2\nrow2     3     4\nrow2     7     8\nrow3     9     0\n",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    }
+  ],
+  "error": null,
+  "showcase_label": "Tistory: pandas append"
+}

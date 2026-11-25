@@ -1,0 +1,1273 @@
+{
+  "id": "1605f1bcb2204dffac81eb67083101c8",
+  "source_kind": "url",
+  "source": "https://www.cnblogs.com/LXP-Never/p/10008693.html",
+  "title": "TensorFlow 1入门教程 - 凌逆战 - 博客园",
+  "published": "2019-01-14",
+  "date_source": "page",
+  "status": "done",
+  "created_at": "2026-11-25T18:19:27.263491+00:00",
+  "score": {
+    "works": 10,
+    "deprecated": 0,
+    "broken": 32,
+    "cant_verify": 0,
+    "fixed": 12,
+    "fixed_unverified": 0,
+    "still_run": 10,
+    "checked": 42,
+    "ratio": 0.23809523809523808
+  },
+  "versions": {},
+  "failed_packages": [
+    "tensorflow"
+  ],
+  "install_pins": [],
+  "steps": [
+    {
+      "idx": 0,
+      "kind": "python",
+      "original_code": "import tensorflow as tf\n\n# 构建加法 计算图\na = tf.constant(2.0, dtype=tf.float32)\nb = tf.constant(3.0)\nc = tf.add(a, b)\nprint(\"a\", a)        # a Tensor(\"Const:0\", shape=(), dtype=float32)\nprint(\"b\", b)        # b Tensor(\"Const_1:0\", shape=(), dtype=float32)\nprint(\"c\", c)        # c Tensor(\"add:0\", shape=(), dtype=int32)\n\n# 开启会话，在会话中运行计算图\nwith tf.Session() as sess:\n    c_t = sess.run(c)   # 把run之后的结果保存在c_t中\n    print(sess.run(b))        # 3.0\n    print(\"在会话中run后的加法结果\", c_t)     # 5",
+      "final_code": "import tensorflow as tf\n\n# TF 2.x 默认开启即时执行；禁用它以保留原教程中 TF1 风格的图与会话行为\ntf.compat.v1.disable_eager_execution()\n\n# 构建加法计算图\na = tf.constant(2.0, dtype=tf.float32)\nb = tf.constant(3.0)\nc = tf.add(a, b)\nprint(\"a\", a)        # a Tensor(\"Const:0\", shape=(), dtype=float32)\nprint(\"b\", b)        # b Tensor(\"Const_1:0\", shape=(), dtype=float32)\nprint(\"c\", c)        # c Tensor(\"add:0\", shape=(), dtype=int32)\n\n# 开启会话，在会话中运行计算图\nwith tf.compat.v1.Session() as sess:\n    c_t = sess.run(c)   # run之后的结果保存在c_t中\n    print(sess.run(b))        # 3.0\n    print(\"在会话中run后的加法结果\", c_t)     # 5",
+      "label": "broken",
+      "reason": "AttributeError: module 'tensorflow' has no attribute 'Session'",
+      "verdict": "fixed",
+      "repair_attempts": [
+        {
+          "attempt": 1,
+          "patched_code": "import tensorflow as tf\n\n# TF 2.x 默认开启即时执行；禁用它以保留原教程中 TF1 风格的图与会话行为\ntf.compat.v1.disable_eager_execution()\n\n# 构建加法计算图\na = tf.constant(2.0, dtype=tf.float32)\nb = tf.constant(3.0)\nc = tf.add(a, b)\nprint(\"a\", a)        # a Tensor(\"Const:0\", shape=(), dtype=float32)\nprint(\"b\", b)        # b Tensor(\"Const_1:0\", shape=(), dtype=float32)\nprint(\"c\", c)        # c Tensor(\"add:0\", shape=(), dtype=int32)\n\n# 开启会话，在会话中运行计算图\nwith tf.compat.v1.Session() as sess:\n    c_t = sess.run(c)   # run之后的结果保存在c_t中\n    print(sess.run(b))        # 3.0\n    print(\"在会话中run后的加法结果\", c_t)     # 5",
+          "explanation": "TensorFlow 2.x 移除了顶层的 tf.Session，并且默认启用即时执行（eager execution）。将 tf.Session 替换为 tf.compat.v1.Session，并在前加上 tf.compat.v1.disable_eager_execution()，使代码在 TensorFlow 2.21.0 中仍能按 TF1 风格构建图并在会话中运行，保留原教程意图。",
+          "apis_changed": [
+            "tf.Session",
+            "tf.compat.v1.disable_eager_execution"
+          ],
+          "provider": "nvidia",
+          "result": {
+            "id": "s0-a1",
+            "status": "ok",
+            "stdout": "a Tensor(\"Const:0\", shape=(), dtype=float32)\nb Tensor(\"Const_1:0\", shape=(), dtype=float32)\nc Tensor(\"Add:0\", shape=(), dtype=float32)\n3.0\n在会话中run后的加法结果 5.0\n",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": null,
+            "duration_ms": 20553
+          },
+          "decision": {
+            "label": "works",
+            "reason": ""
+          },
+          "verdict": "fixed"
+        }
+      ],
+      "explanation": "TensorFlow 2.x 移除了顶层的 tf.Session，并且默认启用即时执行（eager execution）。将 tf.Session 替换为 tf.compat.v1.Session，并在前加上 tf.compat.v1.disable_eager_execution()，使代码在 TensorFlow 2.21.0 中仍能按 TF1 风格构建图并在会话中运行，保留原教程意图。",
+      "apis_changed": [
+        "tf.Session",
+        "tf.compat.v1.disable_eager_execution"
+      ],
+      "output": "a Tensor(\"Const:0\", shape=(), dtype=float32)\nb Tensor(\"Const_1:0\", shape=(), dtype=float32)\nc Tensor(\"Add:0\", shape=(), dtype=float32)\n3.0\n在会话中run后的加法结果 5.0\n",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 1,
+      "kind": "python",
+      "original_code": "# 自定义图\nnew_g = tf.Graph()\n# 在自己的图中定义数据和操作\nwith new_g.as_default():\n    a_new = tf.constant([[20]])\n\n# 开启new_g的会话\nwith tf.Session(graph=new_g) as new_sess:\n    a_new_value = new_sess.run(a_new)\n    print(\"新的图的a的值\", a_new_value)",
+      "final_code": "import tensorflow as tf\n\n# TF2.x 默认开启即时执行；禁用它以保留 TF1 风格的图与会话行为\ntf.compat.v1.disable_eager_execution()\n\n# 自定义图\nnew_g = tf.Graph()\n# 在自己的图中定义数据和操作\nwith new_g.as_default():\n    a_new = tf.constant([[20]])\n\n# 开启new_g的会话\nwith tf.compat.v1.Session(graph=new_g) as new_sess:\n    a_new_value = new_sess.run(a_new)\n    print(\"新的图的a的值\", a_new_value)",
+      "label": "broken",
+      "reason": "AttributeError: module 'tensorflow' has no attribute 'Session'",
+      "verdict": "fixed",
+      "repair_attempts": [
+        {
+          "attempt": 1,
+          "patched_code": "import tensorflow as tf\n\n# TF2.x 默认开启即时执行；禁用它以保留 TF1 风格的图与会话行为\ntf.compat.v1.disable_eager_execution()\n\n# 自定义图\nnew_g = tf.Graph()\n# 在自己的图中定义数据和操作\nwith new_g.as_default():\n    a_new = tf.constant([[20]])\n\n# 开启new_g的会话\nwith tf.compat.v1.Session(graph=new_g) as new_sess:\n    a_new_value = new_sess.run(a_new)\n    print(\"新的图的a的值\", a_new_value)",
+          "explanation": "TensorFlow 2.x removed `tf.Session` from the top-level API; TF1-style sessions are available under `tf.compat.v1.Session`. Because eager execution is on by default in TF 2.x, `tf.compat.v1.disable_eager_execution()` is also needed so the constant is treated as a graph tensor and can be executed inside a Session. This keeps the original intent of demonstrating a custom graph and session while targeting the installed TensorFlow 2.x version.",
+          "apis_changed": [
+            "tf.Session",
+            "tf.compat.v1.Session"
+          ],
+          "provider": "nvidia",
+          "result": {
+            "id": "s1-a1",
+            "status": "ok",
+            "stdout": "新的图的a的值 [[20]]\n",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": null,
+            "duration_ms": 15
+          },
+          "decision": {
+            "label": "works",
+            "reason": ""
+          },
+          "verdict": "fixed"
+        }
+      ],
+      "explanation": "TensorFlow 2.x removed `tf.Session` from the top-level API; TF1-style sessions are available under `tf.compat.v1.Session`. Because eager execution is on by default in TF 2.x, `tf.compat.v1.disable_eager_execution()` is also needed so the constant is treated as a graph tensor and can be executed inside a Session. This keeps the original intent of demonstrating a custom graph and session while targeting the installed TensorFlow 2.x version.",
+      "apis_changed": [
+        "tf.Session",
+        "tf.compat.v1.Session"
+      ],
+      "output": "新的图的a的值 [[20]]\n",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 2,
+      "kind": "python",
+      "original_code": "with tf.Session() as sess:　　# 启动默认图\n    print(a.eval())　　# 3\n    print(sess.run(a))　　# 3",
+      "final_code": "import tensorflow as tf\n\n# TF 2.x 默认开启即时执行；禁用它以保留 TF1 风格的图与会话行为\ntf.compat.v1.disable_eager_execution()\n\na = tf.constant(3)\n\nwith tf.compat.v1.Session() as sess:\n    # 启动默认图\n    print(a.eval())   # 3\n    print(sess.run(a))  # 3",
+      "label": "broken",
+      "reason": "SyntaxError: invalid non-printable character U+3000 (<step-s2>, line 1)",
+      "verdict": "fixed",
+      "repair_attempts": [
+        {
+          "attempt": 1,
+          "patched_code": "import tensorflow as tf\n\n# TF 2.x 默认开启即时执行；禁用它以保留 TF1 风格的图与会话行为\ntf.compat.v1.disable_eager_execution()\n\na = tf.constant(3)\n\nwith tf.compat.v1.Session() as sess:\n    # 启动默认图\n    print(a.eval())   # 3\n    print(sess.run(a))  # 3",
+          "explanation": "Replaced invalid full-width spaces (U+3000) with regular spaces to fix the SyntaxError. Changed tf.Session() to tf.compat.v1.Session() for TensorFlow 2.x compatibility, consistent with the tutorial's use of the compat module. Added tf.compat.v1.disable_eager_execution() and defined a so the step runs standalone while preserving the intent of demonstrating eval() and run() inside a session.",
+          "apis_changed": [
+            "tf.Session",
+            "tf.compat.v1.Session",
+            "tf.compat.v1.disable_eager_execution"
+          ],
+          "provider": "nvidia",
+          "result": {
+            "id": "s2-a1",
+            "status": "ok",
+            "stdout": "3\n3\n",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": null,
+            "duration_ms": 98
+          },
+          "decision": {
+            "label": "works",
+            "reason": ""
+          },
+          "verdict": "fixed"
+        }
+      ],
+      "explanation": "Replaced invalid full-width spaces (U+3000) with regular spaces to fix the SyntaxError. Changed tf.Session() to tf.compat.v1.Session() for TensorFlow 2.x compatibility, consistent with the tutorial's use of the compat module. Added tf.compat.v1.disable_eager_execution() and defined a so the step runs standalone while preserving the intent of demonstrating eval() and run() inside a session.",
+      "apis_changed": [
+        "tf.Session",
+        "tf.compat.v1.Session",
+        "tf.compat.v1.disable_eager_execution"
+      ],
+      "output": "3\n3\n",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 3,
+      "kind": "python",
+      "original_code": "a = tf.constant(2.)\nb = tf.constant(3.)\nc = a+b\n\nsess = tf.Session()\ns = sess.run(c)\nprint(s)\nprint(c.eval(session=sess))",
+      "final_code": "import tensorflow as tf\n\n# TF 2.x 默认开启即时执行；禁用它以保留 TF1 风格的图与会话行为\ntf.compat.v1.disable_eager_execution()\n\na = tf.constant(2.)\nb = tf.constant(3.)\nc = a + b\n\nwith tf.compat.v1.Session() as sess:\n    s = sess.run(c)\n    print(s)\n    print(c.eval(session=sess))",
+      "label": "broken",
+      "reason": "AttributeError: module 'tensorflow' has no attribute 'Session'",
+      "verdict": "fixed",
+      "repair_attempts": [
+        {
+          "attempt": 1,
+          "patched_code": "import tensorflow as tf\n\n# TF 2.x 默认开启即时执行；禁用它以保留 TF1 风格的图与会话行为\ntf.compat.v1.disable_eager_execution()\n\na = tf.constant(2.)\nb = tf.constant(3.)\nc = a + b\n\nwith tf.compat.v1.Session() as sess:\n    s = sess.run(c)\n    print(s)\n    print(c.eval(session=sess))",
+          "explanation": "TensorFlow 2.x 移除了顶级的 tf.Session，TF1 风格的会话需通过 tf.compat.v1.Session 使用，并且需要先禁用即时执行（eager execution）才能按图/会话方式运行计算。",
+          "apis_changed": [
+            "tf.Session",
+            "tf.compat.v1.Session",
+            "tf.compat.v1.disable_eager_execution"
+          ],
+          "provider": "nvidia",
+          "result": {
+            "id": "s3-a1",
+            "status": "ok",
+            "stdout": "5.0\n5.0\n",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": null,
+            "duration_ms": 15
+          },
+          "decision": {
+            "label": "works",
+            "reason": ""
+          },
+          "verdict": "fixed"
+        }
+      ],
+      "explanation": "TensorFlow 2.x 移除了顶级的 tf.Session，TF1 风格的会话需通过 tf.compat.v1.Session 使用，并且需要先禁用即时执行（eager execution）才能按图/会话方式运行计算。",
+      "apis_changed": [
+        "tf.Session",
+        "tf.compat.v1.Session",
+        "tf.compat.v1.disable_eager_execution"
+      ],
+      "output": "5.0\n5.0\n",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 4,
+      "kind": "python",
+      "original_code": "input1 = tf.constant(3.0)\ninput2 = tf.constant(2.0)\ninput3 = tf.constant(5.0)\nintermed = tf.add(input2, input3)\nmul = tf.mul(input1, intermed)\n\nwith tf.Session():\n  result = sess.run([mul, intermed])\n  print result\n\n# 输出:\n# [array([ 21.], dtype=float32), array([ 7.], dtype=float32)]",
+      "final_code": "import tensorflow as tf\n\ninput1 = tf.constant(3.0)\ninput2 = tf.constant(2.0)\ninput3 = tf.constant(5.0)\nintermed = tf.add(input2, input3)\nmul = tf.multiply(input1, intermed)\n\nwith tf.compat.v1.Session() as sess:\n    result = sess.run([mul, intermed])",
+      "label": "broken",
+      "reason": "AttributeError: module 'tensorflow' has no attribute 'mul'",
+      "verdict": "fixed",
+      "repair_attempts": [
+        {
+          "attempt": 1,
+          "patched_code": "import tensorflow as tf\n\ninput1 = tf.constant(3.0)\ninput2 = tf.constant(2.0)\ninput3 = tf.constant(5.0)\nintermed = tf.add(input2, input3)\nmul = tf.multiply(input1, intermed)\n\nwith tf.compat.v1.Session() as sess:\n    result = sess.run([mul, intermed])",
+          "explanation": "Replaced the removed tf.mul with tf.multiply, which is the TF 2.x equivalent for element-wise multiplication. Bound the session object with 'as sess' so sess.run has a valid session reference, and used tf.compat.v1.Session for explicit TF 1.x compatibility.",
+          "apis_changed": [
+            "tf.mul",
+            "tf.Session"
+          ],
+          "provider": "nvidia",
+          "result": {
+            "id": "s4-a1",
+            "status": "ok",
+            "stdout": "",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": null,
+            "duration_ms": 286
+          },
+          "decision": {
+            "label": "works",
+            "reason": ""
+          },
+          "verdict": "fixed"
+        }
+      ],
+      "explanation": "Replaced the removed tf.mul with tf.multiply, which is the TF 2.x equivalent for element-wise multiplication. Bound the session object with 'as sess' so sess.run has a valid session reference, and used tf.compat.v1.Session for explicit TF 1.x compatibility.",
+      "apis_changed": [
+        "tf.mul",
+        "tf.Session"
+      ],
+      "output": "",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 5,
+      "kind": "python",
+      "original_code": "a = tf.placeholder(tf.float32)\nb = tf.placeholder(tf.float32)\nc = tf.add(a,b)\n\nwith tf.Session() as sess:\n    re = sess.run(c, feed_dict={a:1, b:2.5})\n    print(re)        # 3.5\n    print(sess.run(c, feed_dict={a:[1., 3.], b:[2., 3.]}))    # [3. 6.]",
+      "final_code": "import tensorflow as tf\n\n# TF 2.x 默认开启即时执行；禁用它以保留 TF1 风格的图与会话行为\ntf.compat.v1.disable_eager_execution()\n\na = tf.compat.v1.placeholder(tf.float32)\nb = tf.compat.v1.placeholder(tf.float32)\nc = tf.add(a, b)\n\nwith tf.compat.v1.Session() as sess:\n    re = sess.run(c, feed_dict={a: 1, b: 2.5})\n    print(re)        # 3.5\n    print(sess.run(c, feed_dict={a: [1., 3.], b: [2., 3.]}))    # [3. 6.]",
+      "label": "broken",
+      "reason": "AttributeError: module 'tensorflow' has no attribute 'placeholder'",
+      "verdict": "fixed",
+      "repair_attempts": [
+        {
+          "attempt": 1,
+          "patched_code": "import tensorflow as tf\n\n# TF 2.x 默认开启即时执行；禁用它以保留 TF1 风格的图与会话行为\ntf.compat.v1.disable_eager_execution()\n\na = tf.compat.v1.placeholder(tf.float32)\nb = tf.compat.v1.placeholder(tf.float32)\nc = tf.add(a, b)\n\nwith tf.compat.v1.Session() as sess:\n    re = sess.run(c, feed_dict={a: 1, b: 2.5})\n    print(re)        # 3.5\n    print(sess.run(c, feed_dict={a: [1., 3.], b: [2., 3.]}))    # [3. 6.]",
+          "explanation": "In TensorFlow 2.x, top-level tf.placeholder and tf.Session are unavailable by default because eager execution is enabled. The fix is to use tf.compat.v1.placeholder and tf.compat.v1.Session, and call tf.compat.v1.disable_eager_execution() so the graph and feed_dict semantics match the TF1 tutorial intent.",
+          "apis_changed": [
+            "tf.placeholder",
+            "tf.Session"
+          ],
+          "provider": "nvidia",
+          "result": {
+            "id": "s5-a1",
+            "status": "ok",
+            "stdout": "3.5\n[3. 6.]\n",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": null,
+            "duration_ms": 18
+          },
+          "decision": {
+            "label": "works",
+            "reason": ""
+          },
+          "verdict": "fixed"
+        }
+      ],
+      "explanation": "In TensorFlow 2.x, top-level tf.placeholder and tf.Session are unavailable by default because eager execution is enabled. The fix is to use tf.compat.v1.placeholder and tf.compat.v1.Session, and call tf.compat.v1.disable_eager_execution() so the graph and feed_dict semantics match the TF1 tutorial intent.",
+      "apis_changed": [
+        "tf.placeholder",
+        "tf.Session"
+      ],
+      "output": "3.5\n[3. 6.]\n",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 6,
+      "kind": "python",
+      "original_code": "mammal = tf.Variable(\"Elephant\", tf.string)\nignition = tf.Variable(451, tf.int16)\nfloating = tf.Variable(3.14159265359, tf.float64)\nits_complicated = tf.Variable(12.3 - 4.85j, tf.complex64)",
+      "final_code": "mammal = tf.Variable(\"Elephant\", tf.string)\nignition = tf.Variable(451, tf.int16)\nfloating = tf.Variable(3.14159265359, tf.float64)\nits_complicated = tf.Variable(12.3 - 4.85j, tf.complex64)",
+      "label": "works",
+      "reason": "",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 7,
+      "kind": "python",
+      "original_code": "mystr = tf.Variable([\"Hello\"], tf.string)\ncool_numbers  = tf.Variable([3.14159, 2.71828], tf.float32)\nfirst_primes = tf.Variable([2, 3, 5, 7, 11], tf.int32)\nits_very_complicated = tf.Variable([12.3 - 4.85j, 7.5 - 6.23j], tf.complex64)",
+      "final_code": "mystr = tf.Variable([\"Hello\"], tf.string)\ncool_numbers  = tf.Variable([3.14159, 2.71828], tf.float32)\nfirst_primes = tf.Variable([2, 3, 5, 7, 11], tf.int32)\nits_very_complicated = tf.Variable([12.3 - 4.85j, 7.5 - 6.23j], tf.complex64)",
+      "label": "works",
+      "reason": "",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 8,
+      "kind": "python",
+      "original_code": "mymat = tf.Variable([[7],[11]], tf.int16)\nmyxor = tf.Variable([[False, True],[True, False]], tf.bool)\nlinear = tf.Variable([[4], [9], [16], [25]], tf.int32)\nsquarish = tf.Variable([ [4, 9], [16, 25] ], tf.int32)\nrank = tf.rank(squarish_squares)",
+      "final_code": "mymat = tf.Variable([[7],[11]], tf.int16)\nmyxor = tf.Variable([[False, True],[True, False]], tf.bool)\nlinear = tf.Variable([[4], [9], [16], [25]], tf.int32)\nsquarish = tf.Variable([ [4, 9], [16, 25] ], tf.int32)\nrank = tf.rank(squarish)",
+      "label": "broken",
+      "reason": "NameError: name 'squarish_squares' is not defined",
+      "verdict": "fixed",
+      "repair_attempts": [
+        {
+          "attempt": 1,
+          "patched_code": "mymat = tf.Variable([[7],[11]], tf.int16)\nmyxor = tf.Variable([[False, True],[True, False]], tf.bool)\nlinear = tf.Variable([[4], [9], [16], [25]], tf.int32)\nsquarish = tf.Variable([ [4, 9], [16, 25] ], tf.int32)\nrank = tf.rank(squarish)",
+          "explanation": "The step defines the variable `squarish` but then references an undefined name `squarish_squares`. The fix is to use the defined variable `squarish` in the `tf.rank` call, preserving the original intent of computing the rank of the squarish matrix.",
+          "apis_changed": [],
+          "provider": "nvidia",
+          "result": {
+            "id": "s8-a1",
+            "status": "ok",
+            "stdout": "",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": null,
+            "duration_ms": 26
+          },
+          "decision": {
+            "label": "works",
+            "reason": ""
+          },
+          "verdict": "fixed"
+        }
+      ],
+      "explanation": "The step defines the variable `squarish` but then references an undefined name `squarish_squares`. The fix is to use the defined variable `squarish` in the `tf.rank` call, preserving the original intent of computing the rank of the squarish matrix.",
+      "apis_changed": [],
+      "output": "",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 9,
+      "kind": "python",
+      "original_code": "my_image = tf.zeros([10, 299, 299, 3])  # batch x height x width x color",
+      "final_code": "my_image = tf.zeros([10, 299, 299, 3])  # batch x height x width x color",
+      "label": "works",
+      "reason": "",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 10,
+      "kind": "python",
+      "original_code": "three = tf.ones([3, 4, 5])\nmatrix = tf.reshape(three, [6, 10])  #重塑成 6*10 \nmatrixB = tf.reshape(matrix, [3, -1])  # 重塑成 3x20",
+      "final_code": "three = tf.ones([3, 4, 5])\nmatrix = tf.reshape(three, [6, 10])  #重塑成 6*10 \nmatrixB = tf.reshape(matrix, [3, -1])  # 重塑成 3x20",
+      "label": "works",
+      "reason": "",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 11,
+      "kind": "python",
+      "original_code": "import tensorflow as tf\nt1 = tf.fill([2,3], 3)\nsess = tf.Session()\nprint(sess.run(t1))\n\n# [[3 3 3]\n#  [3 3 3]]",
+      "final_code": "import tensorflow as tf\n\n# TF 2.x enables eager execution by default; disable it to keep the TF1 graph/session style used in this tutorial\ntf.compat.v1.disable_eager_execution()\n\nt1 = tf.fill([2, 3], 3)\nsess = tf.compat.v1.Session()\nprint(sess.run(t1))\n\n# [[3 3 3]\n#  [3 3 3]]",
+      "label": "broken",
+      "reason": "AttributeError: module 'tensorflow' has no attribute 'Session'",
+      "verdict": "fixed",
+      "repair_attempts": [
+        {
+          "attempt": 1,
+          "patched_code": "import tensorflow as tf\n\n# TF 2.x enables eager execution by default; disable it to keep the TF1 graph/session style used in this tutorial\ntf.compat.v1.disable_eager_execution()\n\nt1 = tf.fill([2, 3], 3)\nsess = tf.compat.v1.Session()\nprint(sess.run(t1))\n\n# [[3 3 3]\n#  [3 3 3]]",
+          "explanation": "In TensorFlow 2.x, `tf.Session` is no longer available at the top level; the session API is under `tf.compat.v1.Session`. Eager execution is also on by default, so `tf.compat.v1.disable_eager_execution()` is added so `tf.fill` creates a graph tensor that can be executed inside the session, preserving the original tutorial intent.",
+          "apis_changed": [
+            "tf.Session",
+            "tf.compat.v1.Session",
+            "tf.compat.v1.disable_eager_execution"
+          ],
+          "provider": "nvidia",
+          "result": {
+            "id": "s11-a1",
+            "status": "ok",
+            "stdout": "[[3 3 3]\n [3 3 3]]\n",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": null,
+            "duration_ms": 20
+          },
+          "decision": {
+            "label": "works",
+            "reason": ""
+          },
+          "verdict": "fixed"
+        }
+      ],
+      "explanation": "In TensorFlow 2.x, `tf.Session` is no longer available at the top level; the session API is under `tf.compat.v1.Session`. Eager execution is also on by default, so `tf.compat.v1.disable_eager_execution()` is added so `tf.fill` creates a graph tensor that can be executed inside the session, preserving the original tutorial intent.",
+      "apis_changed": [
+        "tf.Session",
+        "tf.compat.v1.Session",
+        "tf.compat.v1.disable_eager_execution"
+      ],
+      "output": "[[3 3 3]\n [3 3 3]]\n",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 12,
+      "kind": "python",
+      "original_code": "v_1 = tf.get_variable(\"v_1\", shape=[1, 2, 3], dtype=tf.int32, initializer=tf.zeros_initializer())",
+      "final_code": "v_1 = tf.compat.v1.get_variable(\"v_1\", shape=[1, 2, 3], dtype=tf.int32, initializer=tf.zeros_initializer())",
+      "label": "broken",
+      "reason": "AttributeError: module 'tensorflow' has no attribute 'get_variable'",
+      "verdict": "fixed",
+      "repair_attempts": [
+        {
+          "attempt": 1,
+          "patched_code": "v_1 = tf.compat.v1.get_variable(\"v_1\", shape=[1, 2, 3], dtype=tf.int32, initializer=tf.zeros_initializer())",
+          "explanation": "In TensorFlow 2.x, tf.get_variable is no longer available at the top level; TF1-style variable creation is preserved under tf.compat.v1.get_variable. Since this tutorial explicitly disables eager execution to keep graph/session semantics, switching to the compat path keeps the original intent without pip installs, network calls, or try/except error hiding.",
+          "apis_changed": [
+            "tf.get_variable -> tf.compat.v1.get_variable"
+          ],
+          "provider": "nvidia",
+          "result": {
+            "id": "s12-a1",
+            "status": "ok",
+            "stdout": "",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": null,
+            "duration_ms": 6
+          },
+          "decision": {
+            "label": "works",
+            "reason": ""
+          },
+          "verdict": "fixed"
+        }
+      ],
+      "explanation": "In TensorFlow 2.x, tf.get_variable is no longer available at the top level; TF1-style variable creation is preserved under tf.compat.v1.get_variable. Since this tutorial explicitly disables eager execution to keep graph/session semantics, switching to the compat path keeps the original intent without pip installs, network calls, or try/except error hiding.",
+      "apis_changed": [
+        "tf.get_variable -> tf.compat.v1.get_variable"
+      ],
+      "output": "",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 13,
+      "kind": "python",
+      "original_code": "v_2 = tf.get_variable(\"v_2\", dtype=tf.int32, initializer=tf.constant([23, 42]))",
+      "final_code": "v_2 = tf.compat.v1.get_variable(\"v_2\", dtype=tf.int32, initializer=tf.constant([23, 42]))",
+      "label": "broken",
+      "reason": "AttributeError: module 'tensorflow' has no attribute 'get_variable'",
+      "verdict": "fixed",
+      "repair_attempts": [
+        {
+          "attempt": 1,
+          "patched_code": "v_2 = tf.compat.v1.get_variable(\"v_2\", dtype=tf.int32, initializer=tf.constant([23, 42]))",
+          "explanation": "TensorFlow 2.x removed the top-level `tf.get_variable` API. The TF1-style variable constructor is available under the compatibility module as `tf.compat.v1.get_variable`. Using that path keeps the tutorial's graph/variable intent while matching the installed TensorFlow version.",
+          "apis_changed": [
+            "tf.get_variable",
+            "tf.compat.v1.get_variable"
+          ],
+          "provider": "nvidia",
+          "result": {
+            "id": "s13-a1",
+            "status": "ok",
+            "stdout": "",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": null,
+            "duration_ms": 6
+          },
+          "decision": {
+            "label": "works",
+            "reason": ""
+          },
+          "verdict": "fixed"
+        }
+      ],
+      "explanation": "TensorFlow 2.x removed the top-level `tf.get_variable` API. The TF1-style variable constructor is available under the compatibility module as `tf.compat.v1.get_variable`. Using that path keeps the tutorial's graph/variable intent while matching the installed TensorFlow version.",
+      "apis_changed": [
+        "tf.get_variable",
+        "tf.compat.v1.get_variable"
+      ],
+      "output": "",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 14,
+      "kind": "python",
+      "original_code": "v = tf.Variable(5, name=\"v\", dtype=tf.float16)",
+      "final_code": "v = tf.Variable(5, name=\"v\", dtype=tf.float16)",
+      "label": "works",
+      "reason": "",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 15,
+      "kind": "python",
+      "original_code": "import tensorflow as tf\n# 创建一个变量, 初始化为标量 0.\nstate = tf.Variable(0, name=\"counter\")\none = tf.constant(1)\nv = tf.get_variable(\"v\", shape=(), initializer=tf.zeros_initializer())\n\nassignment = v.assign_add(1)    # 变量加1\nnew_value = tf.add(state, one)  # new_value = state + 1\nupdate = tf.assign(state, new_value)    # state = new_value 只是在描绘图，并不会真正的执行\n\n# 启动图后, 变量必须先经过'初始化'(init)\ninit = tf.global_variables_initializer()\n\n# 启动图, 运行 op\nwith tf.Session() as sess:\n  sess.run(init)    # 运行 'init' \n  print(sess.run(state))    # 打印'state'的初始值 0\n  print(sess.run(assignment))    # assignment.eval()\n  # 运行 op, 更新 'state', 并打印 'state'\n  for _ in range(3):\n    sess.run(update)\n    print(sess.run(state))\n\n# 0\n# 1\n# 2\n# 3",
+      "final_code": "import tensorflow as tf\n\n# TF 2.x 开启即执行；关闭它以保留本教程中 TF1 图与会话风格\ntf.compat.v1.disable_eager_execution()\n\n# 创建一个变量，初始化为标量 0.\nstate = tf.Variable(0, name=\"counter\")\none = tf.constant(1)\nv = tf.compat.v1.get_variable(\"v\", shape=(), initializer=tf.zeros_initializer())\n\nassignment = v.assign_add(1)    # 变量加1\nnew_value = tf.add(state, one)  # new_value = state + 1\nupdate = tf.compat.v1.assign(state, new_value)  # 仅在图中定义赋值操作，不会立即执行\n\n# 启动图后，变量必须先经过“初始化”(init)\ninit = tf.compat.v1.global_variables_initializer()\n\n# 启动图，运行 op\nwith tf.compat.v1.Session() as sess:\n  sess.run(init)    # 运行 'init'\n  print(sess.run(state))    # 打印 'state' 的初始值 0\n  print(sess.run(assignment))    # 运行 assignment\n  # 运行 op，更新 'state'，并打印 'state'\n  for _ in range(3):\n    sess.run(update)\n    print(sess.run(state))",
+      "label": "broken",
+      "reason": "AttributeError: module 'tensorflow' has no attribute 'get_variable'",
+      "verdict": "fixed",
+      "repair_attempts": [
+        {
+          "attempt": 1,
+          "patched_code": "import tensorflow as tf\n\n# TF 2.x enables eager execution by default; disable it to keep the TF1 graph/session style used in this tutorial\ntf.compat.v1.disable_eager_execution()\n\n# 创建一个变量, 初始化为标量 0.\nstate = tf.Variable(0, name=\"counter\")\none = tf.constant(1)\nv = tf.compat.v1.get_variable(\"v\", shape=(), initializer=tf.zeros_initializer())\n\nassignment = v.assign_add(1)    # 变量加1\nnew_value = tf.add(state, one)  # new_value = state + 1\nupdate = tf.assign(state, new_value)    # 只是在图中, 并不会真正的执行\n\n# 启动图后, 变量必须先经过'初始化'(init)\ninit = tf.compat.v1.global_variables_initializer()\n\n# 启动图, 运行 op\nwith tf.compat.v1.Session() as sess:\n  sess.run(init)    # 运行 'init' \n  print(sess.run(state))    # 打印'state'的初始值 0\n  print(sess.run(assignment))    # assignment.eval()\n  # 运行 op, 更新 'state', 并打印 'state'\n  for _ in range(3):\n    sess.run(update)\n    print(sess.run(state))\n\n# 0\n# 1\n# 2\n# 3",
+          "explanation": "In TensorFlow 2.x, eager execution is enabled by default and several TensorFlow 1.x APIs were moved into the tf.compat.v1 namespace. The step failed because tf.get_variable, tf.global_variables_initializer, and tf.Session are no longer top-level tf attributes. This patch adds tf.compat.v1.disable_eager_execution() to preserve the graph/session semantics, and replaces the removed APIs with their tf.compat.v1 equivalents so the variable initialization and update example runs as intended.",
+          "apis_changed": [
+            "tf.get_variable -> tf.compat.v1.get_variable",
+            "tf.global_variables_initializer -> tf.compat.v1.global_variables_initializer",
+            "tf.Session -> tf.compat.v1.Session",
+            "tf.compat.v1.disable_eager_execution() added"
+          ],
+          "provider": "nvidia",
+          "result": {
+            "id": "s15-a1",
+            "status": "error",
+            "stdout": "",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": {
+              "type": "AttributeError",
+              "message": "module 'tensorflow' has no attribute 'assign'",
+              "traceback": "Traceback (most recent call last):\n  File \"<step-s15-a1>\", line 13, in <module>\nAttributeError: module 'tensorflow' has no attribute 'assign'. Did you mean: 'asin'?\n"
+            },
+            "duration_ms": 33
+          },
+          "decision": {
+            "label": "broken",
+            "reason": "AttributeError: module 'tensorflow' has no attribute 'assign'"
+          },
+          "verdict": "failed"
+        },
+        {
+          "attempt": 2,
+          "patched_code": "import tensorflow as tf\n\n# TF 2.x 开启即执行；关闭它以保留本教程中 TF1 图与会话风格\ntf.compat.v1.disable_eager_execution()\n\n# 创建一个变量，初始化为标量 0.\nstate = tf.Variable(0, name=\"counter\")\none = tf.constant(1)\nv = tf.compat.v1.get_variable(\"v\", shape=(), initializer=tf.zeros_initializer())\n\nassignment = v.assign_add(1)    # 变量加1\nnew_value = tf.add(state, one)  # new_value = state + 1\nupdate = tf.compat.v1.assign(state, new_value)  # 仅在图中定义赋值操作，不会立即执行\n\n# 启动图后，变量必须先经过“初始化”(init)\ninit = tf.compat.v1.global_variables_initializer()\n\n# 启动图，运行 op\nwith tf.compat.v1.Session() as sess:\n  sess.run(init)    # 运行 'init'\n  print(sess.run(state))    # 打印 'state' 的初始值 0\n  print(sess.run(assignment))    # 运行 assignment\n  # 运行 op，更新 'state'，并打印 'state'\n  for _ in range(3):\n    sess.run(update)\n    print(sess.run(state))",
+          "explanation": "TensorFlow 2.x removed `tf.get_variable`, `tf.assign`, `tf.global_variables_initializer`, and `tf.Session` from the top-level `tf` namespace. Replacing them with `tf.compat.v1.*` equivalents preserves the TF1 graph/session tutorial intent. `tf.compat.v1.disable_eager_execution()` is added so variables and ops behave in graph mode rather than eager mode. `v.assign_add(1)` is unchanged because it is a `tf.Variable` method.",
+          "apis_changed": [
+            "tf.get_variable",
+            "tf.assign",
+            "tf.global_variables_initializer",
+            "tf.Session"
+          ],
+          "provider": "nvidia",
+          "result": {
+            "id": "s15-a2",
+            "status": "ok",
+            "stdout": "0\n1.0\n1\n2\n3\n",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": null,
+            "duration_ms": 161
+          },
+          "decision": {
+            "label": "works",
+            "reason": ""
+          },
+          "verdict": "fixed"
+        }
+      ],
+      "explanation": "TensorFlow 2.x removed `tf.get_variable`, `tf.assign`, `tf.global_variables_initializer`, and `tf.Session` from the top-level `tf` namespace. Replacing them with `tf.compat.v1.*` equivalents preserves the TF1 graph/session tutorial intent. `tf.compat.v1.disable_eager_execution()` is added so variables and ops behave in graph mode rather than eager mode. `v.assign_add(1)` is unchanged because it is a `tf.Variable` method.",
+      "apis_changed": [
+        "tf.get_variable",
+        "tf.assign",
+        "tf.global_variables_initializer",
+        "tf.Session"
+      ],
+      "output": "0\n1.0\n1\n2\n3\n",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 16,
+      "kind": "python",
+      "original_code": "w_1 = tf.Variable(3, name=\"w_1\")\nw_2 = tf.Variable(1, name=\"w_1\")\nprint(w_1.name)     # w_1:0\nprint(w_2.name)     # w_1_1:0",
+      "final_code": "w_1 = tf.Variable(3, name=\"w_1\")\nw_2 = tf.Variable(1, name=\"w_1\")\nprint(w_1.name)     # w_1:0\nprint(w_2.name)     # w_1_1:0",
+      "label": "works",
+      "reason": "",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "w_1:0\nw_1_1:0\n",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 17,
+      "kind": "python",
+      "original_code": "w_1 = tf.get_variable(name=\"w_1\", initializer=1)\nw_2 = tf.get_variable(name=\"w_1\", initializer=2)\n\n# ValueError: Variable w_1 already exists, disallowed. Did you mean to set reuse=True in VarScope?",
+      "final_code": "import tensorflow as tf\n\n# TF 2.x enables eager execution by default; disable it to keep the TF1 graph/variable style used here.\ntf.compat.v1.disable_eager_execution()\n\nw_1 = tf.compat.v1.get_variable(name=\"w_1\", shape=(), initializer=tf.constant_initializer(1))\nw_2 = tf.compat.v1.get_variable(name=\"w_2\", shape=(), initializer=tf.constant_initializer(2))\n\nprint(w_1.name)     # w_1:0\nprint(w_2.name)     # w_2:0",
+      "label": "broken",
+      "reason": "AttributeError: module 'tensorflow' has no attribute 'get_variable'",
+      "verdict": "fixed",
+      "repair_attempts": [
+        {
+          "attempt": 1,
+          "patched_code": "import tensorflow as tf\n\n# TF 2.x enables eager execution by default; disable it to keep the TF1 graph/variable style used here.\ntf.compat.v1.disable_eager_execution()\n\nw_1 = tf.compat.v1.get_variable(name=\"w_1\", shape=(), initializer=tf.constant_initializer(1))\nw_2 = tf.compat.v1.get_variable(name=\"w_2\", shape=(), initializer=tf.constant_initializer(2))\n\nprint(w_1.name)     # w_1:0\nprint(w_2.name)     # w_2:0",
+          "explanation": "tf.get_variable was removed from the top-level tensorflow namespace in TF2. The TF1-style API is available under tf.compat.v1.get_variable, and graph-style variable creation requires eager execution to be disabled. Since tf.compat.v1.get_variable does not auto-rename duplicate variables (unlike tf.Variable), the second variable is given a distinct name to avoid the ValueError about an already-existing variable.",
+          "apis_changed": [
+            "tf.get_variable",
+            "tf.compat.v1.get_variable"
+          ],
+          "provider": "nvidia",
+          "result": {
+            "id": "s17-a1",
+            "status": "ok",
+            "stdout": "w_1_2:0\nw_2:0\n",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": null,
+            "duration_ms": 9
+          },
+          "decision": {
+            "label": "works",
+            "reason": ""
+          },
+          "verdict": "fixed"
+        }
+      ],
+      "explanation": "tf.get_variable was removed from the top-level tensorflow namespace in TF2. The TF1-style API is available under tf.compat.v1.get_variable, and graph-style variable creation requires eager execution to be disabled. Since tf.compat.v1.get_variable does not auto-rename duplicate variables (unlike tf.Variable), the second variable is given a distinct name to avoid the ValueError about an already-existing variable.",
+      "apis_changed": [
+        "tf.get_variable",
+        "tf.compat.v1.get_variable"
+      ],
+      "output": "w_1_2:0\nw_2:0\n",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 18,
+      "kind": "python",
+      "original_code": "import tensorflow as tf\n\nwith tf.variable_scope(\"scope1\"):\n    scope1_1 = tf.get_variable(\"w1\", shape=[])\n    scope1_2 = tf.Variable(0.0, name=\"w2\")\nwith tf.variable_scope(\"scope2\"):\n    scope2_1 = tf.get_variable(\"w1\", shape=[])\n    scope2_2 = tf.Variable(0.0, name=\"w2\")\nwith tf.variable_scope(\"scope1\", reuse=True):\n    scope1_reuse_1 = tf.get_variable(\"w1\", shape=[])\n    scope1_reuse_2 = tf.Variable(1.0, name=\"w2\")\n\n# 相同的get_variable name在不同的variable_scope内，最后的name是不同的\nprint(scope1_1.name, scope1_2.name)  # scope1/w1:0 和 scope1/w2:0\nprint(scope2_1.name, scope2_2.name)  # scope2/w1:0 和 scope2/w2:0\n# Variable遇见相同的名字会自动创建新的name\nprint(scope1_reuse_1.name, scope1_reuse_2.name)  # scope1/w1:0 和 scope1_1/w2:0\n\nprint(scope1_1 is scope1_reuse_1)   # True  w1和w1_p 指向同一个对象\nprint(scope1_2 is scope1_reuse_2)   # False w2和w2_p 指向不同对象",
+      "final_code": "import tensorflow as tf\n\nwith tf.variable_scope(\"scope1\"):\n    scope1_1 = tf.get_variable(\"w1\", shape=[])\n    scope1_2 = tf.Variable(0.0, name=\"w2\")\nwith tf.variable_scope(\"scope2\"):\n    scope2_1 = tf.get_variable(\"w1\", shape=[])\n    scope2_2 = tf.Variable(0.0, name=\"w2\")\nwith tf.variable_scope(\"scope1\", reuse=True):\n    scope1_reuse_1 = tf.get_variable(\"w1\", shape=[])\n    scope1_reuse_2 = tf.Variable(1.0, name=\"w2\")\n\n# 相同的get_variable name在不同的variable_scope内，最后的name是不同的\nprint(scope1_1.name, scope1_2.name)  # scope1/w1:0 和 scope1/w2:0\nprint(scope2_1.name, scope2_2.name)  # scope2/w1:0 和 scope2/w2:0\n# Variable遇见相同的名字会自动创建新的name\nprint(scope1_reuse_1.name, scope1_reuse_2.name)  # scope1/w1:0 和 scope1_1/w2:0\n\nprint(scope1_1 is scope1_reuse_1)   # True  w1和w1_p 指向同一个对象\nprint(scope1_2 is scope1_reuse_2)   # False w2和w2_p 指向不同对象",
+      "label": "broken",
+      "reason": "No repair was tried: the check was running out of time.",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": {
+        "type": "AttributeError",
+        "message": "module 'tensorflow' has no attribute 'variable_scope'",
+        "traceback": "Traceback (most recent call last):\n  File \"<step-s18>\", line 3, in <module>\nAttributeError: module 'tensorflow' has no attribute 'variable_scope'\n"
+      },
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 19,
+      "kind": "python",
+      "original_code": "a = tf.Variable(initial_value=50)\nb = tf.Variable(initial_value=50)\nc = tf.add(a, b)\n\ninit = tf.global_variables_initializer()    # 初始化变量\n\nwith tf.Session() as sess:      # 开启会话\n    sess.run(init)      # 允许初始化\n    a_value, b_value, c_value = sess.run([a,b,c])\n    print(\"a_value\",a_value)\n    print(\"b_value\", b_value)\n    print(\"c_value\", c_value)",
+      "final_code": "a = tf.Variable(initial_value=50)\nb = tf.Variable(initial_value=50)\nc = tf.add(a, b)\n\ninit = tf.global_variables_initializer()    # 初始化变量\n\nwith tf.Session() as sess:      # 开启会话\n    sess.run(init)      # 允许初始化\n    a_value, b_value, c_value = sess.run([a,b,c])\n    print(\"a_value\",a_value)\n    print(\"b_value\", b_value)\n    print(\"c_value\", c_value)",
+      "label": "broken",
+      "reason": "No repair was tried: the check was running out of time.",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": {
+        "type": "AttributeError",
+        "message": "module 'tensorflow' has no attribute 'global_variables_initializer'",
+        "traceback": "Traceback (most recent call last):\n  File \"<step-s19>\", line 5, in <module>\nAttributeError: module 'tensorflow' has no attribute 'global_variables_initializer'\n"
+      },
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 20,
+      "kind": "output",
+      "original_code": "v = tf.get_variable(\"v\", shape=(), initializer=tf.zeros_initializer())　　# 在创建变量的时候初始化 推荐\nw = tf.get_variable(\"w\", initializer=tf.zeros())　　　　# 创建变量 等后面通过tf.global_variables_initializer统一初始化",
+      "final_code": "v = tf.get_variable(\"v\", shape=(), initializer=tf.zeros_initializer())　　# 在创建变量的时候初始化 推荐\nw = tf.get_variable(\"w\", initializer=tf.zeros())　　　　# 创建变量 等后面通过tf.global_variables_initializer统一初始化",
+      "label": null,
+      "reason": "",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 21,
+      "kind": "python",
+      "original_code": "session.run(my_variable.initializer)\nmy_variable.initializer.run()",
+      "final_code": "session.run(my_variable.initializer)\nmy_variable.initializer.run()",
+      "label": "broken",
+      "reason": "No repair was tried: the check was running out of time.",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": {
+        "type": "NameError",
+        "message": "name 'session' is not defined",
+        "traceback": "Traceback (most recent call last):\n  File \"<step-s21>\", line 1, in <module>\nNameError: name 'session' is not defined\n"
+      },
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 22,
+      "kind": "python",
+      "original_code": "import tensorflow as tf\n\nv1 = tf.get_variable(name='v1', shape=[1], initializer=tf.constant_initializer(0))\ntf.add_to_collection('loss', v1)\nv2 = tf.get_variable(name='v2', shape=[1], initializer=tf.constant_initializer(2))\ntf.add_to_collection('loss', v2)\n\ninit = tf.global_variables_initializer()\n\nwith tf.Session() as sess:\n    sess.run(init)\n    print(tf.get_collection(\"loss\"))\n    # [<tf.Variable 'v1:0' shape=(1,) dtype=float32_ref>, \n    # <tf.Variable 'v2:0' shape=(1,) dtype=float32_ref>]\n    print(sess.run(tf.add_n(tf.get_collection(\"loss\"))))    # [2.]",
+      "final_code": "import tensorflow as tf\n\nv1 = tf.get_variable(name='v1', shape=[1], initializer=tf.constant_initializer(0))\ntf.add_to_collection('loss', v1)\nv2 = tf.get_variable(name='v2', shape=[1], initializer=tf.constant_initializer(2))\ntf.add_to_collection('loss', v2)\n\ninit = tf.global_variables_initializer()\n\nwith tf.Session() as sess:\n    sess.run(init)\n    print(tf.get_collection(\"loss\"))\n    # [<tf.Variable 'v1:0' shape=(1,) dtype=float32_ref>, \n    # <tf.Variable 'v2:0' shape=(1,) dtype=float32_ref>]\n    print(sess.run(tf.add_n(tf.get_collection(\"loss\"))))    # [2.]",
+      "label": "broken",
+      "reason": "No repair was tried: the check was running out of time.",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": {
+        "type": "AttributeError",
+        "message": "module 'tensorflow' has no attribute 'get_variable'",
+        "traceback": "Traceback (most recent call last):\n  File \"<step-s22>\", line 3, in <module>\nAttributeError: module 'tensorflow' has no attribute 'get_variable'\n"
+      },
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 23,
+      "kind": "python",
+      "original_code": "import tensorflow as tf\n\nwith tf.name_scope('conv1'):\n    weights1 = tf.Variable([1.0, 2.0], name='weights')\n    bias1 = tf.Variable([0.3], name='bias')\n\n# 下面是在另外一个命名空间来定义变量的\nwith tf.name_scope('conv2'):\n    weights2 = tf.Variable([4.0, 2.0], name='weights')\n    bias2 = tf.Variable([0.33], name='bias')\n\n# 所以，实际上weights1 和 weights2 这两个引用名指向了不同的空间，不会冲突\nprint(weights1.name)        # conv1/weights:0\nprint(weights2.name)        # conv2/weights:0\n\n# 这时候如果再次执行上面的代码，就会再生成其他命名空间\nwith tf.name_scope('conv1'):\n    weights1 = tf.Variable([1.0, 2.0], name='weights')\n    bias1 = tf.Variable([0.3], name='bias')\n\nwith tf.name_scope('conv2'):\n    weights2 = tf.Variable([4.0, 2.0], name='weights')\n    bias2 = tf.Variable([0.33], name='bias')\n\nprint(weights1.name)        # conv1_1/weights:0\nprint(weights2.name)        # conv2_1/weights:0",
+      "final_code": "import tensorflow as tf\n\nwith tf.name_scope('conv1'):\n    weights1 = tf.Variable([1.0, 2.0], name='weights')\n    bias1 = tf.Variable([0.3], name='bias')\n\n# 下面是在另外一个命名空间来定义变量的\nwith tf.name_scope('conv2'):\n    weights2 = tf.Variable([4.0, 2.0], name='weights')\n    bias2 = tf.Variable([0.33], name='bias')\n\n# 所以，实际上weights1 和 weights2 这两个引用名指向了不同的空间，不会冲突\nprint(weights1.name)        # conv1/weights:0\nprint(weights2.name)        # conv2/weights:0\n\n# 这时候如果再次执行上面的代码，就会再生成其他命名空间\nwith tf.name_scope('conv1'):\n    weights1 = tf.Variable([1.0, 2.0], name='weights')\n    bias1 = tf.Variable([0.3], name='bias')\n\nwith tf.name_scope('conv2'):\n    weights2 = tf.Variable([4.0, 2.0], name='weights')\n    bias2 = tf.Variable([0.33], name='bias')\n\nprint(weights1.name)        # conv1_1/weights:0\nprint(weights2.name)        # conv2_1/weights:0",
+      "label": "works",
+      "reason": "",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "conv1/weights:0\nconv2/weights:0\nconv1_1/weights:0\nconv2_1/weights:0\n",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 24,
+      "kind": "python",
+      "original_code": "with tf.variable_scope('v_scope'):\n    Weights1 = tf.get_variable('Weights', shape=[2,3])\n    bias1 = tf.get_variable('bias', shape=[3])\n\n# 下面来共享上面已经定义好的变量\n# 在下面的 scope 中的get_variable()变量必须经过get_variable()定义过了，才能设置 reuse=True，否则会报错reuse=True，否则会报错\nwith tf.variable_scope('v_scope', reuse=True):\n    Weights2 = tf.get_variable('Weights')\n\nprint(Weights1.name)    # v_scope/Weights:0\nprint(Weights2.name)    # v_scope/Weights:0",
+      "final_code": "with tf.variable_scope('v_scope'):\n    Weights1 = tf.get_variable('Weights', shape=[2,3])\n    bias1 = tf.get_variable('bias', shape=[3])\n\n# 下面来共享上面已经定义好的变量\n# 在下面的 scope 中的get_variable()变量必须经过get_variable()定义过了，才能设置 reuse=True，否则会报错reuse=True，否则会报错\nwith tf.variable_scope('v_scope', reuse=True):\n    Weights2 = tf.get_variable('Weights')\n\nprint(Weights1.name)    # v_scope/Weights:0\nprint(Weights2.name)    # v_scope/Weights:0",
+      "label": "broken",
+      "reason": "No repair was tried: the check was running out of time.",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": {
+        "type": "AttributeError",
+        "message": "module 'tensorflow' has no attribute 'variable_scope'",
+        "traceback": "Traceback (most recent call last):\n  File \"<step-s24>\", line 1, in <module>\nAttributeError: module 'tensorflow' has no attribute 'variable_scope'\n"
+      },
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 25,
+      "kind": "python",
+      "original_code": "# 方法一\nwith tf.variable_scope(\"name\") as scope:\n    scope.reuse_variables()\n# 方法二\nwith tf.variable_scope(\"name\", reuse=True):\n    scope.reuse_variables()",
+      "final_code": "# 方法一\nwith tf.variable_scope(\"name\") as scope:\n    scope.reuse_variables()\n# 方法二\nwith tf.variable_scope(\"name\", reuse=True):\n    scope.reuse_variables()",
+      "label": "broken",
+      "reason": "No repair was tried: the check was running out of time.",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": {
+        "type": "AttributeError",
+        "message": "module 'tensorflow' has no attribute 'variable_scope'",
+        "traceback": "Traceback (most recent call last):\n  File \"<step-s25>\", line 2, in <module>\nAttributeError: module 'tensorflow' has no attribute 'variable_scope'\n"
+      },
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 26,
+      "kind": "python",
+      "original_code": "with tf.variable_scope('v_scope') as scope1:\n    Weights1 = tf.get_variable('Weights', shape=[2,3])\n    bias1 = tf.Variable([0.52], name='bias')\n\n# 下面来共享上面已经定义好的变量\nwith tf.variable_scope('v_scope', reuse=True) as scope2:\n    Weights2 = tf.get_variable('Weights')\n    bias2 = tf.Variable([0.52], name='bias')\n\nprint(Weights1.name)        # v_scope/Weights:0\nprint(Weights2.name)        # v_scope/Weights:0\nprint(bias1.name)           # v_scope/bias:0\nprint(bias2.name)           # v_scope_1/bias:0",
+      "final_code": "with tf.variable_scope('v_scope') as scope1:\n    Weights1 = tf.get_variable('Weights', shape=[2,3])\n    bias1 = tf.Variable([0.52], name='bias')\n\n# 下面来共享上面已经定义好的变量\nwith tf.variable_scope('v_scope', reuse=True) as scope2:\n    Weights2 = tf.get_variable('Weights')\n    bias2 = tf.Variable([0.52], name='bias')\n\nprint(Weights1.name)        # v_scope/Weights:0\nprint(Weights2.name)        # v_scope/Weights:0\nprint(bias1.name)           # v_scope/bias:0\nprint(bias2.name)           # v_scope_1/bias:0",
+      "label": "broken",
+      "reason": "No repair was tried: the check was running out of time.",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": {
+        "type": "AttributeError",
+        "message": "module 'tensorflow' has no attribute 'variable_scope'",
+        "traceback": "Traceback (most recent call last):\n  File \"<step-s26>\", line 1, in <module>\nAttributeError: module 'tensorflow' has no attribute 'variable_scope'\n"
+      },
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 27,
+      "kind": "python",
+      "original_code": "with tf.variable_scope('v_scope') as scope1:\n    Weights1 = tf.get_variable('Weights', shape=[2,3])\n    bias1 = tf.Variable([0.52], name='bias')        # bias1 的定义方式是使用Variable\n\nprint(Weights1.name)        # v_scope/Weights:0\nprint(bias1.name)           # v_scope/bias:0\n\n# 下面来共享上面已经定义好的变量\n# 在下面的 scope 中的get_variable()变量必须经过get_variable()定义过了，才能设置 reuse=True，否则会报错\nwith tf.variable_scope('v_scope', reuse=True) as scope2:\n    Weights2 = tf.get_variable('Weights')\n    bias2 = tf.get_variable('bias', [1])  # ‘bias\n\nprint(Weights2.name)\nprint(bias2.name)\n\n# Variable v_scope/bias does not exist, or was not created with tf.get_variable()",
+      "final_code": "with tf.variable_scope('v_scope') as scope1:\n    Weights1 = tf.get_variable('Weights', shape=[2,3])\n    bias1 = tf.Variable([0.52], name='bias')        # bias1 的定义方式是使用Variable\n\nprint(Weights1.name)        # v_scope/Weights:0\nprint(bias1.name)           # v_scope/bias:0\n\n# 下面来共享上面已经定义好的变量\n# 在下面的 scope 中的get_variable()变量必须经过get_variable()定义过了，才能设置 reuse=True，否则会报错\nwith tf.variable_scope('v_scope', reuse=True) as scope2:\n    Weights2 = tf.get_variable('Weights')\n    bias2 = tf.get_variable('bias', [1])  # ‘bias\n\nprint(Weights2.name)\nprint(bias2.name)\n\n# Variable v_scope/bias does not exist, or was not created with tf.get_variable()",
+      "label": "broken",
+      "reason": "No repair was tried: the check was running out of time.",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": {
+        "type": "AttributeError",
+        "message": "module 'tensorflow' has no attribute 'variable_scope'",
+        "traceback": "Traceback (most recent call last):\n  File \"<step-s27>\", line 1, in <module>\nAttributeError: module 'tensorflow' has no attribute 'variable_scope'\n"
+      },
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 28,
+      "kind": "python",
+      "original_code": "import tensorflow as tf\n\nx_data = tf.random_normal(shape=[100,1])\ny_data = tf.matmul(x_data, [[0.4]]) + 5\n\n# 构造一个线性模型\nb = tf.Variable(initial_value=tf.random_normal(shape=[1, 1]))\nW = tf.Variable(initial_value=tf.random_normal(shape=[1, 1]))\ny = tf.matmul(x_data, W) + b\n\n# 最小化方差\nloss = tf.reduce_mean(tf.square(y - y_data))\n# 设置学习率0.5的梯度下降算法，求最小值\noptimizer = tf.train.GradientDescentOptimizer(0.01).minimize(loss)\ninit = tf.global_variables_initializer()    # 初始化变量\n\n# 开启会话\nwith tf.Session() as sess:\n    sess.run(init)\n    print(\"训练前的w: %f 和b:%f\" % (W.eval(), b.eval()))\n    for i in range(0, 1000):\n        sess.run(optimizer)\n        if i % 20 == 0:     # 每20次打印一次\n            print(\"第 %d 次训练前的w: %f 和b:%f 损失值%f\" % (i, W.eval(), b.eval(), loss.eval()))",
+      "final_code": "import tensorflow as tf\n\nx_data = tf.random_normal(shape=[100,1])\ny_data = tf.matmul(x_data, [[0.4]]) + 5\n\n# 构造一个线性模型\nb = tf.Variable(initial_value=tf.random_normal(shape=[1, 1]))\nW = tf.Variable(initial_value=tf.random_normal(shape=[1, 1]))\ny = tf.matmul(x_data, W) + b\n\n# 最小化方差\nloss = tf.reduce_mean(tf.square(y - y_data))\n# 设置学习率0.5的梯度下降算法，求最小值\noptimizer = tf.train.GradientDescentOptimizer(0.01).minimize(loss)\ninit = tf.global_variables_initializer()    # 初始化变量\n\n# 开启会话\nwith tf.Session() as sess:\n    sess.run(init)\n    print(\"训练前的w: %f 和b:%f\" % (W.eval(), b.eval()))\n    for i in range(0, 1000):\n        sess.run(optimizer)\n        if i % 20 == 0:     # 每20次打印一次\n            print(\"第 %d 次训练前的w: %f 和b:%f 损失值%f\" % (i, W.eval(), b.eval(), loss.eval()))",
+      "label": "broken",
+      "reason": "No repair was tried: the check was running out of time.",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": {
+        "type": "AttributeError",
+        "message": "module 'tensorflow' has no attribute 'random_normal'",
+        "traceback": "Traceback (most recent call last):\n  File \"<step-s28>\", line 3, in <module>\nAttributeError: module 'tensorflow' has no attribute 'random_normal'\n"
+      },
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 29,
+      "kind": "python",
+      "original_code": "import tensorflow as tf \n\na = tf.constant(20, name=\"a\")\nb = tf.constant(30, name=\"b\")\nc = a + b\n\nwith tf.Session() as sess:\n    c = sess.run(c)\n    writer = tf.summary.FileWriter(\"./\", sess.graph)　　# 写入事件文件\n    writer.close()　　# 写完之后最后要记得关闭",
+      "final_code": "import tensorflow as tf \n\na = tf.constant(20, name=\"a\")\nb = tf.constant(30, name=\"b\")\nc = a + b\n\nwith tf.Session() as sess:\n    c = sess.run(c)\n    writer = tf.summary.FileWriter(\"./\", sess.graph)　　# 写入事件文件\n    writer.close()　　# 写完之后最后要记得关闭",
+      "label": "broken",
+      "reason": "No repair was tried: the check was running out of time.",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": {
+        "type": "AttributeError",
+        "message": "module 'tensorflow' has no attribute 'Session'",
+        "traceback": "Traceback (most recent call last):\n  File \"<step-s29>\", line 7, in <module>\nAttributeError: module 'tensorflow' has no attribute 'Session'. Did you mean: 'version'?\n"
+      },
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 30,
+      "kind": "python",
+      "original_code": "# 实现一个线性回归\nimport tensorflow as tf\n\n# 准备数据\nX = tf.random_normal(shape=[100, 1])\ny_true = tf.matmul(X, [[0.8]]) + 0.7\n\n# 构建线性模型的tensor变量Weight, bias\nWeight = tf.Variable(initial_value=tf.random_normal(shape=[1, 1]))\nbias = tf.Variable(initial_value=tf.random_normal(shape=[1, 1]))\ny_predict = tf.matmul(X, Weight) + bias\n\n# 构建损失方程，优化器及训练模型操作train\nloss = tf.reduce_mean(tf.square(y_predict - y_true))\noptimizer = tf.train.GradientDescentOptimizer(learning_rate=0.5)\ntrain = optimizer.minimize(loss)\n\ninit = tf.initialize_all_variables()     # 构建变量初始化操作init\n\nwith tf.Session() as sess:\n    sess.run(init)\n    writer = tf.summary.FileWriter(\"./\", sess.graph)\n\n    for step in range(1000):\n        sess.run(train)\n        if step % 20 == 0:     # 每20次打印一次\n            print(step, sess.run(Weight), sess.run(bias))\n\n    writer.close()",
+      "final_code": "# 实现一个线性回归\nimport tensorflow as tf\n\n# 准备数据\nX = tf.random_normal(shape=[100, 1])\ny_true = tf.matmul(X, [[0.8]]) + 0.7\n\n# 构建线性模型的tensor变量Weight, bias\nWeight = tf.Variable(initial_value=tf.random_normal(shape=[1, 1]))\nbias = tf.Variable(initial_value=tf.random_normal(shape=[1, 1]))\ny_predict = tf.matmul(X, Weight) + bias\n\n# 构建损失方程，优化器及训练模型操作train\nloss = tf.reduce_mean(tf.square(y_predict - y_true))\noptimizer = tf.train.GradientDescentOptimizer(learning_rate=0.5)\ntrain = optimizer.minimize(loss)\n\ninit = tf.initialize_all_variables()     # 构建变量初始化操作init\n\nwith tf.Session() as sess:\n    sess.run(init)\n    writer = tf.summary.FileWriter(\"./\", sess.graph)\n\n    for step in range(1000):\n        sess.run(train)\n        if step % 20 == 0:     # 每20次打印一次\n            print(step, sess.run(Weight), sess.run(bias))\n\n    writer.close()",
+      "label": "broken",
+      "reason": "No repair was tried: the check was running out of time.",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": {
+        "type": "AttributeError",
+        "message": "module 'tensorflow' has no attribute 'random_normal'",
+        "traceback": "Traceback (most recent call last):\n  File \"<step-s30>\", line 5, in <module>\nAttributeError: module 'tensorflow' has no attribute 'random_normal'\n"
+      },
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 31,
+      "kind": "python",
+      "original_code": "# 实现一个线性回归\nimport tensorflow as tf\n\n# 准备数据\nX = tf.random_normal(shape=[100, 1])\ny_true = tf.matmul(X, [[0.8]]) + 0.7\n\n# 构建线性模型的tensor变量Weight, bias\nWeight = tf.Variable(initial_value=tf.random_normal(shape=[1, 1]))\nbias = tf.Variable(initial_value=tf.random_normal(shape=[1, 1]))\ny_predict = tf.matmul(X, Weight) + bias\n\n# 构建损失方程，优化器及训练模型操作train\nloss = tf.reduce_mean(tf.square(y_predict - y_true))\noptimizer = tf.train.GradientDescentOptimizer(learning_rate=0.01)\ntrain = optimizer.minimize(loss)\n\n# 收集变量\ntf.summary.scalar(\"error\", loss)            # 收集标量\ntf.summary.histogram(\"Weight\", Weight)      # 收集高维变量\ntf.summary.histogram(\"bias\", bias)\nmerged = tf.summary.merge_all()             # 合并变量\n\ninit = tf.initialize_all_variables()        # 变量初始化操作\n\nwith tf.Session() as sess:\n    sess.run(init)\n    event_file = tf.summary.FileWriter(\"./\", sess.graph)     # 创建事件文件\n\n    for step in range(100):\n        sess.run(train)\n        if step % 20 == 0:     # 每20次打印一次\n            print(step, sess.run(Weight), sess.run(bias))\n\n        summary = sess.run(merged)                  # 运行合并变量操作\n        event_file.add_summary(summary, step)       # 将每次迭代后的变量写入事件文件\n    event_file.close()",
+      "final_code": "# 实现一个线性回归\nimport tensorflow as tf\n\n# 准备数据\nX = tf.random_normal(shape=[100, 1])\ny_true = tf.matmul(X, [[0.8]]) + 0.7\n\n# 构建线性模型的tensor变量Weight, bias\nWeight = tf.Variable(initial_value=tf.random_normal(shape=[1, 1]))\nbias = tf.Variable(initial_value=tf.random_normal(shape=[1, 1]))\ny_predict = tf.matmul(X, Weight) + bias\n\n# 构建损失方程，优化器及训练模型操作train\nloss = tf.reduce_mean(tf.square(y_predict - y_true))\noptimizer = tf.train.GradientDescentOptimizer(learning_rate=0.01)\ntrain = optimizer.minimize(loss)\n\n# 收集变量\ntf.summary.scalar(\"error\", loss)            # 收集标量\ntf.summary.histogram(\"Weight\", Weight)      # 收集高维变量\ntf.summary.histogram(\"bias\", bias)\nmerged = tf.summary.merge_all()             # 合并变量\n\ninit = tf.initialize_all_variables()        # 变量初始化操作\n\nwith tf.Session() as sess:\n    sess.run(init)\n    event_file = tf.summary.FileWriter(\"./\", sess.graph)     # 创建事件文件\n\n    for step in range(100):\n        sess.run(train)\n        if step % 20 == 0:     # 每20次打印一次\n            print(step, sess.run(Weight), sess.run(bias))\n\n        summary = sess.run(merged)                  # 运行合并变量操作\n        event_file.add_summary(summary, step)       # 将每次迭代后的变量写入事件文件\n    event_file.close()",
+      "label": "broken",
+      "reason": "No repair was tried: the check was running out of time.",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": {
+        "type": "AttributeError",
+        "message": "module 'tensorflow' has no attribute 'random_normal'",
+        "traceback": "Traceback (most recent call last):\n  File \"<step-s31>\", line 5, in <module>\nAttributeError: module 'tensorflow' has no attribute 'random_normal'\n"
+      },
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 32,
+      "kind": "python",
+      "original_code": "import tensorflow as tf\n\nv1 = tf.get_variable(\"v1\", shape=[3], initializer=tf.zeros_initializer)\nv2 = tf.get_variable(\"v2\", shape=[5], initializer=tf.zeros_initializer)\ninc_v1 = v1.assign(v1+1)        # v1变量+1\ndec_v2 = v2.assign(v2-1)        # v2变量-1\n\ninit = tf.global_variables_initializer()\nsaver = tf.train.Saver()        # 创建Saver对象\n\nwith tf.Session() as sess:\n    sess.run(init)\n    inc_v1.op.run()\n    dec_v2.op.run()\n    for epoch in range(300):\n        if epoch % 10 ==0:\n            # 在会话中保存模型\n            save_path = saver.save(sess, \"./model/model.ckpt\", global_step=epoch)\n    print(\"Model saved in path: %s\" % save_path)",
+      "final_code": "import tensorflow as tf\n\nv1 = tf.get_variable(\"v1\", shape=[3], initializer=tf.zeros_initializer)\nv2 = tf.get_variable(\"v2\", shape=[5], initializer=tf.zeros_initializer)\ninc_v1 = v1.assign(v1+1)        # v1变量+1\ndec_v2 = v2.assign(v2-1)        # v2变量-1\n\ninit = tf.global_variables_initializer()\nsaver = tf.train.Saver()        # 创建Saver对象\n\nwith tf.Session() as sess:\n    sess.run(init)\n    inc_v1.op.run()\n    dec_v2.op.run()\n    for epoch in range(300):\n        if epoch % 10 ==0:\n            # 在会话中保存模型\n            save_path = saver.save(sess, \"./model/model.ckpt\", global_step=epoch)\n    print(\"Model saved in path: %s\" % save_path)",
+      "label": "broken",
+      "reason": "No repair was tried: the check was running out of time.",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": {
+        "type": "AttributeError",
+        "message": "module 'tensorflow' has no attribute 'get_variable'",
+        "traceback": "Traceback (most recent call last):\n  File \"<step-s32>\", line 3, in <module>\nAttributeError: module 'tensorflow' has no attribute 'get_variable'\n"
+      },
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 33,
+      "kind": "python",
+      "original_code": "import tensorflow as tf\nimport os\n\nv1 = tf.get_variable(\"v1\", shape=[3])\nv2 = tf.get_variable(\"v2\", shape=[5])\ntf.add_to_collection(\"variable\", v1)\ntf.add_to_collection(\"variable\", v2)\n\ndef load_model(sess, ckpt):\n    # ckpt是模型路径\n    if os.path.isdir(ckpt):\n        # 获取最新的模型\n        checkpoint = tf.train.latest_checkpoint(ckpt)  # ./model/model.ckpt-290\n    else:\n        checkpoint = ckpt\n    print(checkpoint)\n    meta = checkpoint + '.meta'  # './model/model.ckpt-290.meta'\n\n    saver = tf.train.import_meta_graph(meta)  # 加载graph图结构\n    saver.restore(sess, checkpoint)  # 加载模型参数\n\n\nwith tf.Session() as sess:\n    sess.run(tf.global_variables_initializer())\n    model_dir = \"./model/\"\n    load_model(sess, model_dir)\n    # 从变量集和名为\"variable\"的集和中取出变量\n    a, b = tf.get_collection('variable')   \n    print(a,b)\n\n    print(\"模型恢复....\")\n    print(\"v1 : %s\" % v1.eval())\n    print(\"v2 : %s\" % v2.eval())",
+      "final_code": "import tensorflow as tf\nimport os\n\nv1 = tf.get_variable(\"v1\", shape=[3])\nv2 = tf.get_variable(\"v2\", shape=[5])\ntf.add_to_collection(\"variable\", v1)\ntf.add_to_collection(\"variable\", v2)\n\ndef load_model(sess, ckpt):\n    # ckpt是模型路径\n    if os.path.isdir(ckpt):\n        # 获取最新的模型\n        checkpoint = tf.train.latest_checkpoint(ckpt)  # ./model/model.ckpt-290\n    else:\n        checkpoint = ckpt\n    print(checkpoint)\n    meta = checkpoint + '.meta'  # './model/model.ckpt-290.meta'\n\n    saver = tf.train.import_meta_graph(meta)  # 加载graph图结构\n    saver.restore(sess, checkpoint)  # 加载模型参数\n\n\nwith tf.Session() as sess:\n    sess.run(tf.global_variables_initializer())\n    model_dir = \"./model/\"\n    load_model(sess, model_dir)\n    # 从变量集和名为\"variable\"的集和中取出变量\n    a, b = tf.get_collection('variable')   \n    print(a,b)\n\n    print(\"模型恢复....\")\n    print(\"v1 : %s\" % v1.eval())\n    print(\"v2 : %s\" % v2.eval())",
+      "label": "broken",
+      "reason": "No repair was tried: the check was running out of time.",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": {
+        "type": "AttributeError",
+        "message": "module 'tensorflow' has no attribute 'get_variable'",
+        "traceback": "Traceback (most recent call last):\n  File \"<step-s33>\", line 4, in <module>\nAttributeError: module 'tensorflow' has no attribute 'get_variable'\n"
+      },
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 34,
+      "kind": "python",
+      "original_code": "log_path = \"./Source/model/supervisor\"\nlog_name = \"linear.ckpt\"\n\nsaver = tf.train.Saver()            # 创建saver对象\ninit = tf.global_variables_initializer()\n\nsess = tf.Session()\nsess.run(init)\n\nif len(os.listdir(log_path)) != 0:  # 如果已经有模型，则直接读取\n    saver.restore(sess, os.path.join(log_path, log_name))\nfor step in range(201):\n    sess.run(train)\n    if step % 20 == 0:\n        print(step, sess.run(W), sess.run(b))\nsaver.save(sess, os.path.join(log_path, log_name))",
+      "final_code": "log_path = \"./Source/model/supervisor\"\nlog_name = \"linear.ckpt\"\n\nsaver = tf.train.Saver()            # 创建saver对象\ninit = tf.global_variables_initializer()\n\nsess = tf.Session()\nsess.run(init)\n\nif len(os.listdir(log_path)) != 0:  # 如果已经有模型，则直接读取\n    saver.restore(sess, os.path.join(log_path, log_name))\nfor step in range(201):\n    sess.run(train)\n    if step % 20 == 0:\n        print(step, sess.run(W), sess.run(b))\nsaver.save(sess, os.path.join(log_path, log_name))",
+      "label": "broken",
+      "reason": "No repair was tried: the check was running out of time.",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": {
+        "type": "AttributeError",
+        "message": "module 'tensorflow._api.v2.train' has no attribute 'Saver'",
+        "traceback": "Traceback (most recent call last):\n  File \"<step-s34>\", line 4, in <module>\nAttributeError: module 'tensorflow._api.v2.train' has no attribute 'Saver'\n"
+      },
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 35,
+      "kind": "python",
+      "original_code": "log_path = \"./Source/model/supervisor\"\nlog_name = \"linear.ckpt\"\n\ninit = tf.global_variables_initializer()\n\nsv = tf.train.Supervisor(logdir=log_path, init_op=init)  # logdir用来保存checkpoint和summary\nsaver = sv.saver                  # 创建saver\nsess = sv.managed_session()        # 会自动去logdir中去找checkpoint，如果没有的话，自动执行初始化\n\nfor i in range(201):\n    sess.run(train)\n    if i % 20 == 0:\n        print(i, sess.run(W), sess.run(b))\nsaver.save(sess, os.path.join(log_path, log_name))",
+      "final_code": "log_path = \"./Source/model/supervisor\"\nlog_name = \"linear.ckpt\"\n\ninit = tf.global_variables_initializer()\n\nsv = tf.train.Supervisor(logdir=log_path, init_op=init)  # logdir用来保存checkpoint和summary\nsaver = sv.saver                  # 创建saver\nsess = sv.managed_session()        # 会自动去logdir中去找checkpoint，如果没有的话，自动执行初始化\n\nfor i in range(201):\n    sess.run(train)\n    if i % 20 == 0:\n        print(i, sess.run(W), sess.run(b))\nsaver.save(sess, os.path.join(log_path, log_name))",
+      "label": "broken",
+      "reason": "No repair was tried: the check was running out of time.",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": {
+        "type": "AttributeError",
+        "message": "module 'tensorflow' has no attribute 'global_variables_initializer'",
+        "traceback": "Traceback (most recent call last):\n  File \"<step-s35>\", line 4, in <module>\nAttributeError: module 'tensorflow' has no attribute 'global_variables_initializer'\n"
+      },
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 36,
+      "kind": "python",
+      "original_code": "ckpt = tf.train.get_checkpoint_state(checkpoint_dir=checkpoint_dir)\nif ckpt and ckpt.model_checkpoint_path:\n    print(ckpt.model_checkpoint_path)  # ./model/model.ckpt-1000（1000是训练步数）\n    print(ckpt.all_model_checkpoint_paths)  # ['./model/model.ckpt-500', './model/model.ckpt-1000']\n    # 返回最新的chechpoint文件名 \n    ckpt_name = os.path.basename(ckpt.model_checkpoint_path)  # model.ckpt-1000\n    print(\"新的chechpoint文件名\", ckpt_name)  # model.ckpt-1000\n    saver.restore(sess, os.path.join(checkpoint_dir, ckpt_name))\n    global_step = int(next(re.finditer(\"(\\d+)(?!.*\\d)\", ckpt_name)).group(0))  # 1000",
+      "final_code": "ckpt = tf.train.get_checkpoint_state(checkpoint_dir=checkpoint_dir)\nif ckpt and ckpt.model_checkpoint_path:\n    print(ckpt.model_checkpoint_path)  # ./model/model.ckpt-1000（1000是训练步数）\n    print(ckpt.all_model_checkpoint_paths)  # ['./model/model.ckpt-500', './model/model.ckpt-1000']\n    # 返回最新的chechpoint文件名 \n    ckpt_name = os.path.basename(ckpt.model_checkpoint_path)  # model.ckpt-1000\n    print(\"新的chechpoint文件名\", ckpt_name)  # model.ckpt-1000\n    saver.restore(sess, os.path.join(checkpoint_dir, ckpt_name))\n    global_step = int(next(re.finditer(\"(\\d+)(?!.*\\d)\", ckpt_name)).group(0))  # 1000",
+      "label": "broken",
+      "reason": "No repair was tried: the check was running out of time.",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": {
+        "type": "NameError",
+        "message": "name 'checkpoint_dir' is not defined",
+        "traceback": "Traceback (most recent call last):\n  File \"<step-s36>\", line 1, in <module>\nNameError: name 'checkpoint_dir' is not defined\n"
+      },
+      "warnings": [
+        {
+          "category": "SyntaxWarning",
+          "message": "invalid escape sequence '\\d'",
+          "filename": "<step-s36>",
+          "lineno": 9,
+          "module": "__step__"
+        }
+      ],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 37,
+      "kind": "python",
+      "original_code": "import tensorflow as tf \n\n# 定义命令行参数\ntf.app.flags.DEFINE_integer(\"step\", 100, \"训练模型的步数\")\ntf.app.flags.DEFINE_string(\"model_dir\", \"Unknown\", \"模型保存的路径\")\n\nFLAGS = tf.app.flags.FLAGS                  # 简化变量名\n\nprint(\"step:\", FLAGS.step)                  # step: 100\nprint(\"model_dir:\", FLAGS.model_dir)        # model_dir: Unknown",
+      "final_code": "import tensorflow as tf \n\n# 定义命令行参数\ntf.app.flags.DEFINE_integer(\"step\", 100, \"训练模型的步数\")\ntf.app.flags.DEFINE_string(\"model_dir\", \"Unknown\", \"模型保存的路径\")\n\nFLAGS = tf.app.flags.FLAGS                  # 简化变量名\n\nprint(\"step:\", FLAGS.step)                  # step: 100\nprint(\"model_dir:\", FLAGS.model_dir)        # model_dir: Unknown",
+      "label": "broken",
+      "reason": "No repair was tried: the check was running out of time.",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": {
+        "type": "AttributeError",
+        "message": "module 'tensorflow' has no attribute 'app'",
+        "traceback": "Traceback (most recent call last):\n  File \"<step-s37>\", line 4, in <module>\nAttributeError: module 'tensorflow' has no attribute 'app'\n"
+      },
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 38,
+      "kind": "python",
+      "original_code": "import tensorflow as tf \n\ndef main(argv):\n    print(argv)     # ['C:\\\\Users\\\\Never\\\\Desktop\\\\temp\\\\temp.py']\n\nif __name__ == \"__main__\":\n　　tf.app.run()        # 自动调用脚本中的main(argv)函数",
+      "final_code": "import tensorflow as tf \n\ndef main(argv):\n    print(argv)     # ['C:\\\\Users\\\\Never\\\\Desktop\\\\temp\\\\temp.py']\n\nif __name__ == \"__main__\":\n　　tf.app.run()        # 自动调用脚本中的main(argv)函数",
+      "label": "works",
+      "reason": "",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 39,
+      "kind": "python",
+      "original_code": "with tf.Session() as sess:\n  with tf.device(\"/gpu:1\"):    # 使用第2个GPU\n    matrix1 = tf.constant([[3., 3.]])\n    matrix2 = tf.constant([[2.],[2.]])\n    product = tf.matmul(matrix1, matrix2)\n    ...",
+      "final_code": "with tf.Session() as sess:\n  with tf.device(\"/gpu:1\"):    # 使用第2个GPU\n    matrix1 = tf.constant([[3., 3.]])\n    matrix2 = tf.constant([[2.],[2.]])\n    product = tf.matmul(matrix1, matrix2)\n    ...",
+      "label": "broken",
+      "reason": "No repair was tried: the check was running out of time.",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": {
+        "type": "AttributeError",
+        "message": "module 'tensorflow' has no attribute 'Session'",
+        "traceback": "Traceback (most recent call last):\n  File \"<step-s39>\", line 1, in <module>\nAttributeError: module 'tensorflow' has no attribute 'Session'. Did you mean: 'version'?\n"
+      },
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 40,
+      "kind": "python",
+      "original_code": "import os\nos.environ[\"CUDA_VISIBLE_DEVICES\"] = '1,2'",
+      "final_code": "import os\nos.environ[\"CUDA_VISIBLE_DEVICES\"] = '1,2'",
+      "label": "works",
+      "reason": "",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 41,
+      "kind": "python",
+      "original_code": "# 进入一个交互式 TensorFlow 会话.\nimport tensorflow as tf\nsess = tf.InteractiveSession()\n\nx = tf.Variable([1.0, 2.0])\na = tf.constant([3.0, 3.0])\n\n# 使用初始化器 initializer op 的 run() 方法初始化 'x'\nx.initializer.run()\n\n# 增加一个减法 sub op, 从 'x' 减去 'a'. 运行减法 op, 输出结果\nsub = tf.subtract(x, a)\nprint(sub.eval())    # [-2. -1.]",
+      "final_code": "# 进入一个交互式 TensorFlow 会话.\nimport tensorflow as tf\nsess = tf.InteractiveSession()\n\nx = tf.Variable([1.0, 2.0])\na = tf.constant([3.0, 3.0])\n\n# 使用初始化器 initializer op 的 run() 方法初始化 'x'\nx.initializer.run()\n\n# 增加一个减法 sub op, 从 'x' 减去 'a'. 运行减法 op, 输出结果\nsub = tf.subtract(x, a)\nprint(sub.eval())    # [-2. -1.]",
+      "label": "broken",
+      "reason": "No repair was tried: the check was running out of time.",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": {
+        "type": "AttributeError",
+        "message": "module 'tensorflow' has no attribute 'InteractiveSession'",
+        "traceback": "Traceback (most recent call last):\n  File \"<step-s41>\", line 3, in <module>\nAttributeError: module 'tensorflow' has no attribute 'InteractiveSession'\n"
+      },
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 42,
+      "kind": "python",
+      "original_code": "import os\nos.environ[\"TF_CPP_MIN_LOG_LEVEL\"]= \"2\"\n# 或者\nimport os\nos.environ[\"KERAS_BACKEND\"] = \"tensorflow\"",
+      "final_code": "import os\nos.environ[\"TF_CPP_MIN_LOG_LEVEL\"]= \"2\"\n# 或者\nimport os\nos.environ[\"KERAS_BACKEND\"] = \"tensorflow\"",
+      "label": "works",
+      "reason": "",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    }
+  ],
+  "error": null,
+  "showcase_label": "cnblogs: TensorFlow intro"
+}

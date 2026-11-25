@@ -2,7 +2,7 @@
   "id": "154f8713010747368a674e004bb69d88",
   "source_kind": "url",
   "source": "https://www.youtube.com/watch?v=_zN8QziXjd8",
-  "title": null,
+  "title": "Pandas Tutorial #3: Appending to a DataFrame",
   "published": null,
   "date_source": "unknown",
   "status": "done",
@@ -1040,5 +1040,6 @@
       "read_agreement": null
     }
   ],
-  "error": null
+  "error": null,
+  "showcase_label": "YouTube: pandas append video tutorial"
 }

@@ -1,0 +1,196 @@
+{
+  "id": "624546eeeda94487b11c589ef8a0f03e",
+  "source_kind": "url",
+  "source": "https://www.tutorialspoint.com/article/how-to-append-two-dataframes-in-pandas",
+  "title": "How to append two DataFrames in Pandas?",
+  "published": "2026-03-26",
+  "date_source": "page",
+  "status": "done",
+  "created_at": "2026-11-25T18:05:24.981536+00:00",
+  "score": {
+    "works": 1,
+    "deprecated": 0,
+    "broken": 2,
+    "cant_verify": 0,
+    "fixed": 2,
+    "fixed_unverified": 0,
+    "still_run": 1,
+    "checked": 3,
+    "ratio": 0.3333333333333333
+  },
+  "versions": {
+    "pandas": "3.1.1"
+  },
+  "failed_packages": [],
+  "install_pins": [],
+  "steps": [
+    {
+      "idx": 0,
+      "kind": "python",
+      "original_code": "import pandas as pd\n\ndf1 = pd.DataFrame({\"x\": [5, 2], \"y\": [4, 7], \"z\": [9, 3]})\ndf2 = pd.DataFrame({\"x\": [1, 3], \"y\": [1, 9], \"z\": [29, 30]})\n\nprint(\"Input DataFrame 1 is:\")\nprint(df1)\nprint(\"\\nInput DataFrame 2 is:\")\nprint(df2)\n\ndf3 = df1.append(df2, ignore_index=True)\nprint(\"\\nAfter appending, DataFrame is:\")\nprint(df3)",
+      "final_code": "import pandas as pd\n\ndf1 = pd.DataFrame({\"x\": [5, 2], \"y\": [4, 7], \"z\": [9, 3]})\ndf2 = pd.DataFrame({\"x\": [1, 3], \"y\": [1, 9], \"z\": [29, 30]})\n\nprint(\"Input DataFrame 1 is:\")\nprint(df1)\nprint(\"\\nInput DataFrame 2 is:\")\nprint(df2)\n\ndf3 = pd.concat([df1, df2], ignore_index=True)\nprint(\"\\nAfter appending, DataFrame is:\")\nprint(df3)",
+      "label": "broken",
+      "reason": "AttributeError: 'DataFrame' object has no attribute 'append'",
+      "verdict": "fixed",
+      "repair_attempts": [
+        {
+          "attempt": 1,
+          "patched_code": "import pandas as pd\n\ndf1 = pd.DataFrame({\"x\": [5, 2], \"y\": [4, 7], \"z\": [9, 3]})\ndf2 = pd.DataFrame({\"x\": [1, 3], \"y\": [1, 9], \"z\": [29, 30]})\n\nprint(\"Input DataFrame 1 is:\")\nprint(df1)\nprint(\"\\nInput DataFrame 2 is:\")\nprint(df2)\n\ndf3 = pd.concat([df1, df2], ignore_index=True)\nprint(\"\\nAfter appending, DataFrame is:\")\nprint(df3)",
+          "explanation": "Replaced the removed DataFrame.append() method with pd.concat(), which is the supported way to combine DataFrames in pandas 3.1.1. The ignore_index=True parameter preserves the original behavior of resetting the row index.",
+          "apis_changed": [
+            "DataFrame.append",
+            "pd.concat"
+          ],
+          "provider": "nvidia",
+          "result": {
+            "id": "s0-a1",
+            "status": "ok",
+            "stdout": "Input DataFrame 1 is:\n   x  y  z\n0  5  4  9\n1  2  7  3\n\nInput DataFrame 2 is:\n   x  y   z\n0  1  1  29\n1  3  9  30\n\nAfter appending, DataFrame is:\n   x  y   z\n0  5  4   9\n1  2  7   3\n2  1  1  29\n3  3  9  30\n",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": null,
+            "duration_ms": 1209
+          },
+          "decision": {
+            "label": "works",
+            "reason": ""
+          },
+          "verdict": "fixed"
+        }
+      ],
+      "explanation": "Replaced the removed DataFrame.append() method with pd.concat(), which is the supported way to combine DataFrames in pandas 3.1.1. The ignore_index=True parameter preserves the original behavior of resetting the row index.",
+      "apis_changed": [
+        "DataFrame.append",
+        "pd.concat"
+      ],
+      "output": "Input DataFrame 1 is:\n   x  y  z\n0  5  4  9\n1  2  7  3\n\nInput DataFrame 2 is:\n   x  y   z\n0  1  1  29\n1  3  9  30\n\nAfter appending, DataFrame is:\n   x  y   z\n0  5  4   9\n1  2  7   3\n2  1  1  29\n3  3  9  30\n",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 1,
+      "kind": "output",
+      "original_code": "Input DataFrame 1 is:\n   x  y  z\n0  5  4  9\n1  2  7  3\n\nInput DataFrame 2 is:\n   x  y   z\n0  1  1  29\n1  3  9  30\n\nAfter appending, DataFrame is:\n   x  y   z\n0  5  4   9\n1  2  7   3\n2  1  1  29\n3  3  9  30",
+      "final_code": "Input DataFrame 1 is:\n   x  y  z\n0  5  4  9\n1  2  7  3\n\nInput DataFrame 2 is:\n   x  y   z\n0  1  1  29\n1  3  9  30\n\nAfter appending, DataFrame is:\n   x  y   z\n0  5  4   9\n1  2  7   3\n2  1  1  29\n3  3  9  30",
+      "label": null,
+      "reason": "",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 2,
+      "kind": "python",
+      "original_code": "import pandas as pd\n\ndf1 = pd.DataFrame({\"x\": [5, 2], \"y\": [4, 7], \"z\": [9, 3]})\ndf2 = pd.DataFrame({\"a\": [1, 3], \"b\": [1, 9], \"c\": [29, 30]})\n\nprint(\"Input DataFrame 1 is:\")\nprint(df1)\nprint(\"\\nInput DataFrame 2 is:\")\nprint(df2)\n\ndf3 = df1.append(df2)\nprint(\"\\nAfter appending, DataFrame is:\")\nprint(df3)",
+      "final_code": "import pandas as pd\n\ndf1 = pd.DataFrame({\"x\": [5, 2], \"y\": [4, 7], \"z\": [9, 3]})\ndf2 = pd.DataFrame({\"a\": [1, 3], \"b\": [1, 9], \"c\": [29, 30]})\n\nprint(\"Input DataFrame 1 is:\")\nprint(df1)\nprint(\"\\nInput DataFrame 2 is:\")\nprint(df2)\n\ndf3 = pd.concat([df1, df2], ignore_index=True)\nprint(\"\\nAfter appending, DataFrame is:\")\nprint(df3)",
+      "label": "broken",
+      "reason": "AttributeError: 'DataFrame' object has no attribute 'append'",
+      "verdict": "fixed",
+      "repair_attempts": [
+        {
+          "attempt": 1,
+          "patched_code": "import pandas as pd\n\ndf1 = pd.DataFrame({\"x\": [5, 2], \"y\": [4, 7], \"z\": [9, 3]})\ndf2 = pd.DataFrame({\"a\": [1, 3], \"b\": [1, 9], \"c\": [29, 30]})\n\nprint(\"Input DataFrame 1 is:\")\nprint(df1)\nprint(\"\\nInput DataFrame 2 is:\")\nprint(df2)\n\ndf3 = pd.concat([df1, df2], ignore_index=True)\nprint(\"\\nAfter appending, DataFrame is:\")\nprint(df3)",
+          "explanation": "DataFrame.append() was removed in pandas 2.0.0 and is unavailable in pandas 3.1.1. The tutorial intent of stacking two DataFrames is preserved by using pd.concat([df1, df2], ignore_index=True), which concatenates the rows and resets the index.",
+          "apis_changed": [
+            "DataFrame.append",
+            "pd.concat"
+          ],
+          "provider": "nvidia",
+          "result": {
+            "id": "s2-a1",
+            "status": "ok",
+            "stdout": "Input DataFrame 1 is:\n   x  y  z\n0  5  4  9\n1  2  7  3\n\nInput DataFrame 2 is:\n   a  b   c\n0  1  1  29\n1  3  9  30\n\nAfter appending, DataFrame is:\n     x    y    z    a    b     c\n0  5.0  4.0  9.0  NaN  NaN   NaN\n1  2.0  7.0  3.0  NaN  NaN   NaN\n2  NaN  NaN  NaN  1.0  1.0  29.0\n3  NaN  NaN  NaN  3.0  9.0  30.0\n",
+            "stderr": "",
+            "result": null,
+            "warnings": [],
+            "error": null,
+            "duration_ms": 27
+          },
+          "decision": {
+            "label": "works",
+            "reason": ""
+          },
+          "verdict": "fixed"
+        }
+      ],
+      "explanation": "DataFrame.append() was removed in pandas 2.0.0 and is unavailable in pandas 3.1.1. The tutorial intent of stacking two DataFrames is preserved by using pd.concat([df1, df2], ignore_index=True), which concatenates the rows and resets the index.",
+      "apis_changed": [
+        "DataFrame.append",
+        "pd.concat"
+      ],
+      "output": "Input DataFrame 1 is:\n   x  y  z\n0  5  4  9\n1  2  7  3\n\nInput DataFrame 2 is:\n   a  b   c\n0  1  1  29\n1  3  9  30\n\nAfter appending, DataFrame is:\n     x    y    z    a    b     c\n0  5.0  4.0  9.0  NaN  NaN   NaN\n1  2.0  7.0  3.0  NaN  NaN   NaN\n2  NaN  NaN  NaN  1.0  1.0  29.0\n3  NaN  NaN  NaN  3.0  9.0  30.0\n",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 3,
+      "kind": "output",
+      "original_code": "Input DataFrame 1 is:\n   x  y  z\n0  5  4  9\n1  2  7  3\n\nInput DataFrame 2 is:\n   a  b   c\n0  1  1  29\n1  3  9  30\n\nAfter appending, DataFrame is:\n     x    y    z    a    b     c\n0  5.0  4.0  9.0  NaN  NaN   NaN\n1  2.0  7.0  3.0  NaN  NaN   NaN\n0  NaN  NaN  NaN  1.0  1.0  29.0\n1  NaN  NaN  NaN  3.0  9.0  30.0",
+      "final_code": "Input DataFrame 1 is:\n   x  y  z\n0  5  4  9\n1  2  7  3\n\nInput DataFrame 2 is:\n   a  b   c\n0  1  1  29\n1  3  9  30\n\nAfter appending, DataFrame is:\n     x    y    z    a    b     c\n0  5.0  4.0  9.0  NaN  NaN   NaN\n1  2.0  7.0  3.0  NaN  NaN   NaN\n0  NaN  NaN  NaN  1.0  1.0  29.0\n1  NaN  NaN  NaN  3.0  9.0  30.0",
+      "label": null,
+      "reason": "",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 4,
+      "kind": "python",
+      "original_code": "import pandas as pd\n\ndf1 = pd.DataFrame({\"x\": [5, 2], \"y\": [4, 7], \"z\": [9, 3]})\ndf2 = pd.DataFrame({\"x\": [1, 3], \"y\": [1, 9], \"z\": [29, 30]})\n\n# Using pd.concat() instead of append()\ndf3 = pd.concat([df1, df2], ignore_index=True)\nprint(\"Using pd.concat():\")\nprint(df3)",
+      "final_code": "import pandas as pd\n\ndf1 = pd.DataFrame({\"x\": [5, 2], \"y\": [4, 7], \"z\": [9, 3]})\ndf2 = pd.DataFrame({\"x\": [1, 3], \"y\": [1, 9], \"z\": [29, 30]})\n\n# Using pd.concat() instead of append()\ndf3 = pd.concat([df1, df2], ignore_index=True)\nprint(\"Using pd.concat():\")\nprint(df3)",
+      "label": "works",
+      "reason": "",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "Using pd.concat():\n   x  y   z\n0  5  4   9\n1  2  7   3\n2  1  1  29\n3  3  9  30\n",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    },
+    {
+      "idx": 5,
+      "kind": "output",
+      "original_code": "Using pd.concat():\n   x  y   z\n0  5  4   9\n1  2  7   3\n2  1  1  29\n3  3  9  30",
+      "final_code": "Using pd.concat():\n   x  y   z\n0  5  4   9\n1  2  7   3\n2  1  1  29\n3  3  9  30",
+      "label": null,
+      "reason": "",
+      "verdict": null,
+      "repair_attempts": [],
+      "explanation": "",
+      "apis_changed": [],
+      "output": "",
+      "error": null,
+      "warnings": [],
+      "video_timestamp": null,
+      "low_confidence": false,
+      "read_agreement": null
+    }
+  ],
+  "error": null,
+  "showcase_label": "Tutorialspoint: append two DataFrames"
+}
