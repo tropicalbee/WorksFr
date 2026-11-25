@@ -9,6 +9,8 @@ const ROWS: Row[] = [
   { code: 'df.append(row)', tone: 'broken', label: 'Broken' },
   { code: 'df.groupby("city").sum()', tone: 'dep', label: 'Deprecated' },
   { code: 'df.to_csv("out.csv")', tone: 'works', label: 'Works' },
+  { code: 'const total = _.sum(prices)', tone: 'works', label: 'Works' },
+  { code: 'printf("%d\\n", count);', tone: 'works', label: 'Works' },
 ]
 
 const at = (ms: number) => ({ '--delay': `${ms}ms` }) as CSSProperties

@@ -23,7 +23,7 @@ export function LandingFooter() {
       <div className="lp-foot-grid">
         <div className="lp-foot-brand">
           <Link to="/" className="wordmark">WorksFr<span className="wordmark-period">.</span></Link>
-          <p>Checks Python tutorials against today's libraries in a sandbox.</p>
+          <p>Checks coding tutorials against today's libraries in a sandbox.</p>
         </div>
         <section aria-labelledby="foot-product">
           <h2 id="foot-product">Product</h2>
