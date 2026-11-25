@@ -128,7 +128,7 @@ npm run lint
 
 ## Use WorksFr from an agent (MCP)
 
-WorksFr ships an MCP server, so Claude Code, Claude Desktop, Cursor or any other MCP client can check a tutorial and read back the verified fixes. The server only talks to the backend's HTTP API. The sandbox stays in the backend, and the MCP process never runs tutorial code. Start the backend first (`uvicorn app.main:app`). If it isn't on `http://127.0.0.1:8000`, set `WORKSFR_API_URL`.
+WorksFr ships an MCP server, so Claude Code, Claude Desktop, Cursor or any other MCP client can check a tutorial and read back the fixes that ran. The server only talks to the backend's HTTP API. The sandbox stays in the backend, and the MCP process never runs tutorial code. Start the backend first (`uvicorn app.main:app`). If it isn't on `http://127.0.0.1:8000`, set `WORKSFR_API_URL`.
 
 Add it to Claude Code. Run this from the project root, and use your own path:
 
@@ -185,3 +185,7 @@ assets/     README screenshots
 - Linters and coding agents flag or upgrade deprecated calls in your own project.
 
 WorksFr works on someone else's tutorial, before you write any code. It takes any tutorial link, runs it, and repairs the broken Python steps.
+
+## License
+
+Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). If you redistribute WorksFr or build on it, keep the NOTICE file.
