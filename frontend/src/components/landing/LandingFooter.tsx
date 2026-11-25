@@ -6,7 +6,7 @@ import './footer.css'
 
 const REPO_URL = 'https://github.com/tropicalbee/WorksFr'
 const READS = ['Web pages', 'Jupyter notebooks', 'GitHub READMEs', 'Stack Overflow answers', 'YouTube videos']
-const SAFETY = ['Runs on your machine.', 'Tutorial code runs only in a container.', 'No network during runs.']
+const SAFETY = ['Checks run locally in Docker, not on a shared server.', 'Tutorial code runs only in a container.', 'No network during runs.']
 
 export function LandingFooter() {
   const navigate = useNavigate()

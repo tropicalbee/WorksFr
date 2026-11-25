@@ -82,7 +82,7 @@ export default function TryPage() {
           <p>Open <a href="http://localhost:5173">http://localhost:5173</a> and paste a tutorial link.</p>
 
           <h2>Why isn't there a live demo?</h2>
-          <p>Every check runs the tutorial's code in a sandbox, so for now WorksFr runs on your own machine. A hosted version is planned.</p>
+          <p>Tutorial code is untrusted, so WorksFr runs it in a Docker sandbox on your own machine, never on someone else's server. Running untrusted code for the public safely needs real infrastructure, so a hosted version is on the roadmap.</p>
           <p><a href="https://github.com/tropicalbee/WorksFr">WorksFr on GitHub</a></p>
         </main>
         <LandingFooter />

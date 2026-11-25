@@ -42,7 +42,7 @@ describe('failed check report', () => {
   )
 })
 
-it('shows the sandbox review note next to a verified replacement', () => {
+it('shows the sandbox review note next to an accepted replacement', () => {
   const step: StepReport = {
     idx: 0, kind: 'python', original_code: 'x = 1', final_code: 'x = 2',
     label: 'broken', verdict: 'fixed', reason: '', explanation: '', output: '', low_confidence: false,
@@ -50,7 +50,7 @@ it('shows the sandbox review note next to a verified replacement', () => {
   const markup = renderToStaticMarkup(<ReplacementDiff step={step} />)
 
   expect(markup).toContain('Replacement that ran')
-  expect(markup).toContain('Ran in the sandbox. Read it before you run it on your machine.')
+  expect(markup).toContain('Ran in the sandbox without an error. Its output wasn&#x27;t compared with the tutorial&#x27;s, so read it before you run it.')
 })
 
 describe('steps read from a video', () => {

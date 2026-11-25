@@ -14,7 +14,7 @@ export function FixDiffVisual() {
       </div>
       <p className="lp-verdict lp-slide-x" style={at(2210)}>
         <Package aria-hidden="true" />
-        <span>Verified fix. The patched step ran in the sandbox without an error. <span className="lp-dim">DataFrame.append was removed in pandas 2.0.</span></span>
+        <span>Runs clean. The patched step ran in the sandbox without an error. <span className="lp-dim">DataFrame.append was removed in pandas 2.0.</span></span>
       </p>
     </>
   )

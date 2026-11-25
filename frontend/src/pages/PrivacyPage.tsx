@@ -1,9 +1,13 @@
+import { isShowcase } from '@/api/checkSource'
 import { LegalLayout } from '@/components/LegalLayout'
 
 export default function PrivacyPage() {
   return (
     <LegalLayout title="Privacy">
-      <p>WorksFr runs on your machine. Its authors receive nothing from it, and it has no analytics or tracking.</p>
+      {isShowcase && (
+        <p>This site is a static showcase. It serves saved reports from real checks, runs no code and has no analytics or tracking.</p>
+      )}
+      <p>When you run WorksFr yourself, it runs on your machine. Its authors receive nothing from it, and it has no analytics or tracking.</p>
       <h2>What stays on your machine</h2>
       <p>Checks, steps and events are stored in a local SQLite database. Secrets live only in <code>backend/.env</code>.</p>
       <h2>What leaves your machine</h2>
