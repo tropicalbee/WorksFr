@@ -183,7 +183,7 @@ def test_paste_auto_detects_typescript_markers(code: str) -> None:
 
 
 def test_paste_auto_keeps_aliases_that_parse_as_python() -> None:
-    result = extract_paste('type Score = int', None)
+    result = extract_paste("type Score = int", None)
     assert [block.kind for block in result.blocks] == [StepKind.PYTHON]
 
 
