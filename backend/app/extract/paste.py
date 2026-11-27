@@ -45,6 +45,7 @@ class PastedCode:
     title: str | None = None
     language: str = "auto"
     """`python`, `javascript`, `typescript`, `c`, `cpp` or `auto`."""
+    source_url: str | None = None
 
 
 def _is_shell_line(line: str) -> bool:

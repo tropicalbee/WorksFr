@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { isShowcase } from '@/api/checkSource'
+import { BookmarkletSetup } from '@/components/BookmarkletSetup'
 import { SiteHeader } from '@/components/SiteHeader'
 import { LandingFooter } from '@/components/landing/LandingFooter'
 import { Button } from '@/components/ui/button'
@@ -37,6 +39,8 @@ export default function TryPage() {
       <div className="lp-page">
         <main className="legal">
           <h1>Run WorksFr yourself</h1>
+
+          <BookmarkletSetup showcase={isShowcase} origin={window.location.origin} />
 
           <h2>1. What you need</h2>
           <ul>

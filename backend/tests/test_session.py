@@ -5,8 +5,9 @@ import pytest
 from support.local_sandbox import LocalRunnerSandbox
 
 from app.config import Settings
+from app.labels import REASON_TAMPERING
 from app.models import Block, Environment, ErrorInfo, ExecResult, Label, RepairAttempt, StepKind
-from app.sandbox.interface import Sandbox, SandboxError, StepTimeoutError
+from app.sandbox.interface import Sandbox, SandboxError, SandboxTampering, StepTimeoutError
 from app.session import CheckSession, CheckTimeoutError
 from app.step import Step
 
@@ -41,6 +42,39 @@ def test_timeout_restarts_and_replays(session: CheckSession) -> None:
     later = step(2, "x")
     session.run(later)
     assert later.result.result == "42"
+
+
+@pytest.mark.parametrize("gpus", ["", "all"])
+def test_gpu_precheck_only_skips_when_disabled(gpus: str) -> None:
+    sandbox = Mock(spec=Sandbox)
+    sandbox.start.return_value = Environment()
+    message = "CUDA error: out of memory"
+    sandbox.exec.return_value = ExecResult(
+        id="s0", status="error", error=ErrorInfo(type="RuntimeError", message=message)
+    )
+    with CheckSession(sandbox, Settings(_env_file=None, sandbox_gpus=gpus)) as current:
+        current.start([])
+        decision = current.run(step(0, "tensor.cuda()"))
+
+    assert decision.label == Label.CANT_VERIFY
+    if gpus:
+        sandbox.exec.assert_called_once_with("s0", "tensor.cuda()", lang="python")
+        assert message in decision.reason
+    else:
+        sandbox.exec.assert_not_called()
+        assert decision.reason == "needs a GPU"
+
+
+def test_tampering_restarts_and_replays_earlier_steps() -> None:
+    sandbox = Mock(spec=Sandbox)
+    sandbox.start.return_value = Environment()
+    sandbox.exec.side_effect = [ExecResult(id="s0", status="ok"), SandboxTampering()]
+    with CheckSession(sandbox, Settings(_env_file=None)) as current:
+        current.start([])
+        current.run(step(0, "x = 42"))
+        decision = current.run(step(1, "x"))
+        assert (decision.label, decision.reason) == (Label.CANT_VERIFY, REASON_TAMPERING)
+        sandbox.restart.assert_called_once_with([(StepKind.PYTHON, "x = 42")])
 
 
 def test_clean_patch_accept_and_reset(session: CheckSession) -> None:

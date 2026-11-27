@@ -161,6 +161,8 @@ export function CheckForm({ featured }: { featured?: FeaturedExample[] }) {
         </div>
       )}
     </form>
-    {isShowcase && <ExampleChips featured={featured} checks={checks} />}
+    {isShowcase ? <ExampleChips featured={featured} checks={checks} /> : (
+      <Link to="/try" className="metadata underline underline-offset-2">Use the bookmarklet</Link>
+    )}
   </>)
 }

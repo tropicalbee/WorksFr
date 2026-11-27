@@ -7,6 +7,7 @@ from urllib.parse import urljoin, urlsplit
 import httpx
 
 from app.extract.errors import ExtractionError
+from app.extract.safe_network import is_public_address
 
 MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024
 
@@ -27,7 +28,7 @@ def _checked_addresses(url: str) -> set[ipaddress.IPv4Address | ipaddress.IPv6Ad
         if not addresses:
             raise ExtractionError("URL host has no public addresses")
         for ip in addresses:
-            if not ip.is_global or ip.is_multicast or ip.is_reserved or ip.is_unspecified:
+            if not is_public_address(ip):
                 raise ExtractionError("URL host must resolve only to public addresses")
         return addresses
     except (OSError, ValueError) as exc:
@@ -71,13 +72,14 @@ def fetch_response(
     max_bytes: int,
     headers: dict[str, str] | None = None,
     timeout: float | None = None,
+    head: bool = False,
 ) -> httpx.Response:
     """Read a bounded response after validating the URL and connected peer at each hop."""
     for hop in range(6):
         addresses = _checked_addresses(url)
         try:
             with client.stream(
-                "GET",
+                "HEAD" if head else "GET",
                 url,
                 follow_redirects=False,
                 headers=headers,
@@ -92,6 +94,8 @@ def fetch_response(
                         raise ExtractionError("Too many redirects (maximum 5)")
                     url = urljoin(url, location)
                     continue
+                if head:
+                    return httpx.Response(response.status_code, headers=response.headers)
                 data = bytearray()
                 for chunk in response.iter_bytes():
                     if len(data) + len(chunk) > max_bytes:

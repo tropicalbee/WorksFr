@@ -15,6 +15,7 @@ from app.models import ErrorInfo, ExecResult, Label, LabelDecision, PatchVerdict
 from app.packages import dist_for_import, normalize
 
 REASON_TIMEOUT = "too slow: the step timed out"
+REASON_TAMPERING = "The step wrote to the checker's reply channel, so its result can't be trusted."
 REASON_KEYBOARD = "needs keyboard input"
 REASON_API_KEY = "needs an API key"
 REASON_NETWORK = "needs network access"
@@ -149,6 +150,7 @@ def label_step(
     kind: StepKind = StepKind.PYTHON,
     timed_out: bool = False,
     failed_packages: Collection[str] = (),
+    skipped_packages: Mapping[str, int] | None = None,
     guessed_packages: Collection[str] = (),
     failed_npm_packages: Collection[str] = (),
 ) -> LabelDecision:
@@ -189,6 +191,12 @@ def label_step(
     if etype == "ModuleNotFoundError" and _missing_module_is_failed(message, failed_packages):
         found = _MODULE_NAME.search(message)
         package = dist_for_import(found.group(1).split(".")[0]) if found else "The package"
+        if skipped_packages and package in skipped_packages:
+            size = skipped_packages[package]
+            return LabelDecision(
+                label=Label.CANT_VERIFY,
+                reason=f"needs {package}, which is too large for the sandbox ({size} MB)",
+            )
         return _failed_install_decision(package)
     if etype == "ImportError" and (match := _IMPORT_FROM.search(message)):
         if dist_for_import(match.group(1)) in {normalize(name) for name in guessed_packages}:
@@ -212,15 +220,18 @@ def _call_name(func: ast.expr) -> str:
     return ""
 
 
-def _precheck_call(node: ast.Call) -> LabelDecision | None:
+def _precheck_call(node: ast.Call, *, gpu_enabled: bool) -> LabelDecision | None:
     name = _call_name(node.func)
     gpu = LabelDecision(label=Label.CANT_VERIFY, reason=REASON_GPU)
-    if name == "cuda" and isinstance(node.func, ast.Attribute):
+    if not gpu_enabled and name == "cuda" and isinstance(node.func, ast.Attribute):
         return gpu
-    if any(kw.arg == "device" and _is_cuda_str(kw.value) for kw in node.keywords):
+    if not gpu_enabled and any(
+        kw.arg == "device" and _is_cuda_str(kw.value) for kw in node.keywords
+    ):
         return gpu
     if (
-        isinstance(node.func, ast.Attribute)
+        not gpu_enabled
+        and isinstance(node.func, ast.Attribute)
         and name in ("device", "to")
         and node.args
         and _is_cuda_str(node.args[0])
@@ -251,7 +262,11 @@ def _input_scan_code(code: str, *, keep_readline: bool = False, keep_strings: bo
 
 
 def precheck(
-    code: str, *, kind: StepKind = StepKind.PYTHON, c_system_headers: Collection[str] = ()
+    code: str,
+    *,
+    kind: StepKind = StepKind.PYTHON,
+    c_system_headers: Collection[str] = (),
+    gpu_enabled: bool = False,
 ) -> LabelDecision | None:
     """Decide Can't verify before running, or leave the decision to the sandbox."""
     if kind in (StepKind.C, StepKind.CPP):
@@ -286,7 +301,7 @@ def precheck(
         return None
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):
-            decision = _precheck_call(node)
+            decision = _precheck_call(node, gpu_enabled=gpu_enabled)
             if decision is not None:
                 return decision
     return None
@@ -401,6 +416,41 @@ def cascade_source(error: ErrorInfo | None, unbound: Mapping[str, int]) -> int |
         return None
     match = re.fullmatch(r"name ['\"]([^'\"]+)['\"] is not defined", error.message)
     return unbound.get(match.group(1)) if match else None
+
+
+def replaced_error_name(
+    error: ErrorInfo | None, code: str, step_idx: int, replaced: Collection[str]
+) -> str | None:
+    if error is None:
+        return None
+    if error.type == "NameError":
+        match = re.fullmatch(r"name ['\"]([^'\"]+)['\"] is not defined", error.message)
+        return match.group(1) if match and match.group(1) in replaced else None
+    if error.type != "AttributeError":
+        return None
+    attribute = re.fullmatch(r".+ has no attribute ['\"]([^'\"]+)['\"]", error.message)
+    frames = re.findall(rf'File "<step-s{step_idx}>", line (\d+)', error.traceback)
+    if not attribute or not frames:
+        return None
+    lines = code.splitlines()
+    line = int(frames[-1])
+    if not 1 <= line <= len(lines):
+        return None
+    try:
+        tree = ast.parse(lines[line - 1].strip())
+    except (SyntaxError, ValueError):
+        return None
+    return next(
+        (
+            node.value.id
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Attribute)
+            and node.attr == attribute.group(1)
+            and isinstance(node.value, ast.Name)
+            and node.value.id in replaced
+        ),
+        None,
+    )
 
 
 def cascade_decision(

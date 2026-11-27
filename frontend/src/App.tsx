@@ -8,7 +8,8 @@ const CheckPage = lazy(() => import('./pages/CheckPage'))
 const TermsPage = lazy(() => import('./pages/TermsPage'))
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'))
 const SecurityPage = lazy(() => import('./pages/SecurityPage'))
-const TryPage = isShowcase ? lazy(() => import('./pages/TryPage')) : null
+const TryPage = lazy(() => import('./pages/TryPage'))
+const SendPage = isShowcase ? null : lazy(() => import('./pages/SendPage'))
 const ReportPreview = import.meta.env.DEV ? lazy(() => import('./preview/ReportPreview')) : null
 
 export default function App() {
@@ -28,7 +29,8 @@ export default function App() {
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/security" element={<SecurityPage />} />
-          {TryPage && <Route path="/try" element={<TryPage />} />}
+          <Route path="/try" element={<TryPage />} />
+          {SendPage && <Route path="/send" element={<SendPage />} />}
           {ReportPreview && <Route path="/preview/report" element={<ReportPreview />} />}
           <Route
             path="*"

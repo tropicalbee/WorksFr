@@ -193,6 +193,31 @@ def _repl_output(text: str) -> str | None:
     return normalize_text("\n".join(lines)) or None
 
 
+def _mixed_repl(text: str) -> tuple[str, str] | None:
+    lines = text.split("\n")
+    for index, line in enumerate(lines):
+        if not line.startswith((">>> ", "... ")):
+            continue
+        prefix = "\n".join(lines[:index]).rstrip()
+        if not prefix or parse_python(prefix) is None:
+            return None
+        return prefix, "\n".join(lines[index:])
+    return None
+
+
+def _removed_output(text: str, runnable: str) -> str | None:
+    # Removing a whole marked span can leave an empty placeholder line.
+    remaining = iter(line for line in runnable.split("\n") if line.strip())
+    expected = next(remaining, None)
+    removed = []
+    for line in text.split("\n"):
+        if line == expected:
+            expected = next(remaining, None)
+        else:
+            removed.append(line)
+    return (normalize_text("\n".join(removed)) or None) if expected is None else None
+
+
 def looks_like_shell(text: str) -> bool:
     for line in text.split("\n"):
         stripped = line.strip()
@@ -245,12 +270,25 @@ def _classify_python_text(text: str, without_output: str | None) -> tuple[StepKi
 def classify(text: str, hint: str | None, without_output: str | None = None) -> Block:
     """Classify normalized text. Returns a Block with idx 0; callers renumber."""
     kind, runnable = _classify(text, hint, without_output)
+    shown = None
+    if kind in (StepKind.PYTHON, StepKind.REPL, StepKind.OUTPUT) and hint not in OUTPUT_HINTS:
+        if (mixed := _mixed_repl(text)) is not None:
+            prefix, prompted = mixed
+            kind = StepKind.REPL
+            runnable = "\n".join((prefix, strip_repl(prompted)))
+            shown = _repl_output(prompted)
+        elif kind == StepKind.REPL:
+            shown = _repl_output(text)
+        elif kind == StepKind.PYTHON and runnable and runnable != text:
+            if runnable == without_output:
+                shown = _removed_output(text, runnable)
+            else:
+                shown = normalize_text(text[len(runnable) :]) or None
     if kind in (StepKind.JAVASCRIPT, StepKind.TYPESCRIPT) and (
         hint in JSX_HINTS or has_jsx_tags(text)
     ):
         # Keep a step for precheck and the report while withholding executable source.
         runnable = ""
-    shown = _repl_output(text) if kind == StepKind.REPL else None
     return Block(idx=0, kind=kind, code=text, runnable_code=runnable, shown_output=shown)
 
 

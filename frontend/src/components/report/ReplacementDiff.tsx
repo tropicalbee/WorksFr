@@ -6,6 +6,7 @@ import { diffLines } from '@/lib/diff'
 export function ReplacementDiff({ step }: { step: StepReport }) {
   const groups = diffLines(step.original_code, step.final_code)
   const unverified = step.verdict === 'fixed_unverified'
+  const compared = step.output_check && step.output_check.status !== 'not_compared'
 
   return (
     <section className="replacement" aria-label="Replacement">
@@ -42,7 +43,9 @@ export function ReplacementDiff({ step }: { step: StepReport }) {
         <CornerDownRight aria-hidden="true" />
         {unverified
           ? 'Replacement got past the changed API; the live call was not verified'
-          : "Ran in the sandbox without an error. Its output wasn't compared with the tutorial's, so read it before you run it."}
+          : compared
+            ? 'Ran in the sandbox without an error.'
+            : "Ran in the sandbox without an error. Its output wasn't compared with the tutorial's, so read it before you run it."}
       </p>
       <div className="api-chips">
         {step.apis_changed?.map(api => (

@@ -21,6 +21,10 @@ class SandboxTimeLimit(SandboxError):
     """The whole-check time limit ran out while the sandbox was working."""
 
 
+class SandboxTampering(SandboxError):
+    """The runner returned an unexpected or invalid protocol message."""
+
+
 class Sandbox(Protocol):
     def start(self, packages: list[str], npm_packages: list[str] | None = None) -> Environment:
         """Install pip and npm packages, cut the network, and start the runner.

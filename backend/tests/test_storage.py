@@ -205,6 +205,7 @@ def test_existing_database_gains_video_fields_without_losing_rows(
     assert loaded.steps[0].output == "existing output"
     assert loaded.steps[0].video_timestamp is None
     assert loaded.steps[0].output_check is None
+    assert loaded.published_before is None
     assert loaded.steps[0].low_confidence is False
     assert loaded.steps[0].read_agreement is None
     with sqlite3.connect(path) as conn:
@@ -275,7 +276,7 @@ def test_startup_records_failure_for_interrupted_checks(database: str) -> None:
 
     error = "The check stopped because the server restarted. Run it again."
     app = create_app(Settings(_env_file=None, database_path=database, providers=[]))
-    with TestClient(app) as client:
+    with TestClient(app, client=("127.0.0.1", 50000)) as client:
         for check_id in ("running", "queued"):
             response = client.get(f"/api/checks/{check_id}")
             assert response.status_code == 200

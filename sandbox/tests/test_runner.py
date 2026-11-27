@@ -541,6 +541,19 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(reply["id"], "s2")
         self.assertEqual(self.execute("__name__")["result"], "'__main__'")
 
+    def test_nonce_for_exec_probe_and_protocol_error(self) -> None:
+        self.assertNotIn("nonce", self.ready)
+        reply = self.request({"op": "exec", "id": "s1", "nonce": "n1", "code": "value = 40"})
+        self.assertEqual((reply["id"], reply["nonce"], reply["status"]), ("s1", "n1", "ok"))
+        reply = self.request(
+            {"op": "probe", "id": "p1", "nonce": "n2", "target": "value", "name": "real"}
+        )
+        self.assertEqual((reply["id"], reply["nonce"], reply["status"]), ("p1", "n2", "ok"))
+        reply = self.request({"op": "exec", "id": "bad", "nonce": "n3"})
+        self.assertEqual(
+            (reply["id"], reply["nonce"], reply["error"]["type"]), ("bad", "n3", "ProtocolError")
+        )
+
     def test_python_native_and_child_output(self) -> None:
         reply = self.execute(
             "import os, subprocess, sys\n"

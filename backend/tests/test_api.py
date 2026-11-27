@@ -46,7 +46,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         transport=httpx.MockTransport(lambda _: httpx.Response(200, text="<pre>x = 1</pre>"))
     ) as http:
         app = create_app(settings)
-        with TestClient(app) as client:
+        with TestClient(app, client=("127.0.0.1", 50000)) as client:
             app.state.executor.shutdown(wait=False)
             app.state.executor = InlineExecutor()
             app.state.deps = PipelineDeps(
@@ -257,3 +257,26 @@ def test_paste_route_rejects_empty_and_oversized_code(client: TestClient) -> Non
         assert response.status_code == 422
         assert isinstance(response.json()["detail"], str)
     assert client.post("/api/checks/code", json={"code": "x" * 200_000}).status_code == 200
+
+
+def test_paste_source_url_is_stored_as_metadata(client: TestClient) -> None:
+    source = "http://127.0.0.1/bookmarklet-source#example"
+    response = client.post(
+        "/api/checks/code", json={"code": "print(1)", "title": "Imported", "source_url": source}
+    )
+    assert response.status_code == 200
+    report = client.get(f"/api/checks/{response.json()['check_id']}").json()
+    assert report["source_kind"] == "paste"
+    assert report["source"] == source
+    assert report["title"] == "Imported"
+    assert report["status"] == "done"
+    assert report["steps"][0]["output"].strip() == "1"
+
+
+@pytest.mark.parametrize(
+    "source",
+    ["javascript:alert(1)", "//example.test", "https://", "https://example.test/" + "x" * 2048],
+)
+def test_paste_rejects_an_invalid_source_url(client: TestClient, source: str) -> None:
+    response = client.post("/api/checks/code", json={"code": "print(1)", "source_url": source})
+    assert response.status_code == 422

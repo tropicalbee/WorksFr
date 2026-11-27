@@ -73,6 +73,12 @@ pre { margin: 0; }
 .attempt h4 span { color: var(--text-3); }
 .output { margin-top: 8px; padding: 14px; border-radius: 8px; background: var(--surface-code); overflow-x: auto; }
 .output + h4 { margin-top: 20px; }
+.output-comparison { border-top: 1px solid var(--border); margin-top: 22px; padding-top: 14px; }
+.output-comparison-title { display: flex; align-items: center; gap: 7px; color: var(--text); font-size: 14px; font-weight: 590; }
+.output-comparison-title + .metadata { margin-top: 4px; }
+.output-comparison-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.output-comparison-pair figure { margin: 0; min-width: 0; }
+@media (max-width: 640px) { .output-comparison-pair { grid-template-columns: minmax(0, 1fr); } }
 .environment { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 40px; border-top: 1px solid var(--border); margin-top: 72px; padding-top: 32px; }
 .environment h2 { font-size: 15px; }
 .environment-heading p { margin-top: 7px; }

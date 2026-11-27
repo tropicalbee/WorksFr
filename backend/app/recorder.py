@@ -3,7 +3,7 @@
 from app import storage
 from app.broker import Broker
 from app.events import CheckEvent, StoredEvent
-from app.models import CheckStatus
+from app.models import CheckStatus, DateSource
 
 
 class RecorderSink:
@@ -31,7 +31,12 @@ class RecorderSink:
             storage.save_step(self.db_path, self.check_id, event.step)
         elif event.type == "done":
             storage.update_check(
-                self.db_path, self.check_id, status=CheckStatus.DONE, score=event.score
+                self.db_path,
+                self.check_id,
+                status=CheckStatus.DONE,
+                score=event.score,
+                published_before=event.published_before,
+                date_source=DateSource.ESTIMATE if event.published_before is not None else None,
             )
         elif event.type == "failed":
             storage.update_check(

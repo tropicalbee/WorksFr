@@ -4,13 +4,14 @@ import asyncio
 import json
 from collections.abc import AsyncIterator, Callable, Coroutine
 from typing import Annotated, Any, Literal
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 import nbformat
 from fastapi import APIRouter, File, Header, HTTPException, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from fastapi.routing import APIRoute
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from app import storage
 from app.events import StoredEvent
@@ -37,6 +38,26 @@ class CodeSubmission(BaseModel):
     code: str
     title: str | None = None
     language: Literal["python", "javascript", "typescript", "c", "cpp", "auto"] | None = None
+    source_url: str | None = Field(default=None, max_length=2048)
+
+    @field_validator("source_url")
+    @classmethod
+    def _validate_source_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        try:
+            parsed = urlsplit(value)
+            valid = (
+                parsed.scheme in ("http", "https")
+                and parsed.hostname
+                and not any(ord(char) <= 32 or ord(char) == 127 for char in value)
+            )
+            _ = parsed.port
+        except ValueError:
+            valid = False
+        if not valid:
+            raise ValueError("Use an absolute HTTP or HTTPS source URL")
+        return value
 
 
 class CheckCreated(BaseModel):
@@ -56,7 +77,7 @@ def _submit(request: Request, source: str | tuple[str, bytes] | PastedCode) -> C
         if route.kind == "video":
             source = route.fetch_urls[0]
     if isinstance(source, PastedCode):
-        source_kind, shown = SourceKind.PASTE, PASTE_SOURCE
+        source_kind, shown = SourceKind.PASTE, source.source_url or PASTE_SOURCE
     elif isinstance(source, str):
         source_kind, shown = SourceKind.URL, source
     else:
@@ -98,7 +119,9 @@ def submit_code(body: CodeSubmission, request: Request) -> CheckCreated:
         raise HTTPException(422, "Paste some code to check")
     if len(body.code) > MAX_PASTE_CHARS:
         raise HTTPException(422, "The pasted text is over the 200,000 character limit")
-    return _submit(request, PastedCode(body.code, body.title, body.language or "auto"))
+    return _submit(
+        request, PastedCode(body.code, body.title, body.language or "auto", body.source_url)
+    )
 
 
 def _notebook_byte_limit(request: Request) -> int:

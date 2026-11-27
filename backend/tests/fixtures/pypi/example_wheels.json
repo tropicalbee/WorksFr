@@ -1,0 +1,13 @@
+{
+  "info": {"version": "2.0"},
+  "urls": [],
+  "releases": {
+    "3.0": [{"filename": "example-3.0-py3-none-any.whl", "size": 99, "yanked": true}],
+    "2.0": [
+      {"filename": "example-2.0-cp311-cp311-manylinux_2_17_x86_64.whl", "size": 311},
+      {"filename": "example-2.0-py3-none-any.whl", "size": 100},
+      {"filename": "example-2.0.tar.gz", "size": 50},
+      {"filename": "example-2.0-cp312-cp312-manylinux_2_17_x86_64.whl", "size": 312}
+    ]
+  }
+}

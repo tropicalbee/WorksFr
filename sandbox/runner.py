@@ -658,6 +658,8 @@ def probe(request: dict[str, Any], namespace: dict[str, Any], capture: Capture) 
 def validate(request: Any) -> dict[str, Any]:
     if not isinstance(request, dict):
         raise ProtocolError("Request must be a JSON object")
+    if "nonce" in request and not isinstance(request["nonce"], str):
+        raise ProtocolError("nonce must be a string")
     op = request.get("op")
     if op not in ("exec", "probe"):
         raise ProtocolError("Unknown operation; expected exec or probe")
@@ -741,6 +743,8 @@ def main() -> None:
                     "status": "error",
                     "error": exception_details(exc),
                 }
+            if isinstance(request, dict) and isinstance(request.get("nonce"), str):
+                reply["nonce"] = request["nonce"]
             send(protocol_fd, reply, child=child)
     finally:
         capture.close()

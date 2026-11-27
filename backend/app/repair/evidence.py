@@ -12,7 +12,7 @@ import logging
 import re
 import textwrap
 from collections.abc import Callable
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 from urllib.parse import urldefrag, urljoin, urlparse
 
 import httpx
@@ -37,6 +37,7 @@ MAX_WARNINGS = 5
 FETCH_TIMEOUT = 15.0
 MAX_EVIDENCE_BYTES = 4 * 1024 * 1024
 TAVILY_URL = "https://api.tavily.com/search"
+PYPI_ORIGIN = "https://pypi.org"
 
 EvidenceSource = Literal["error", "warning", "probe", "changelog", "search"]
 
@@ -46,6 +47,7 @@ class EvidenceItem(BaseModel):
     title: str
     content: str
     url: str | None = None
+    removed_in: tuple[str, str] | None = None
 
 
 class DocCache(Protocol):
@@ -284,18 +286,23 @@ def _fetch(
         return None
 
 
+def pypi_metadata(
+    package: str, client: httpx.Client, cache: DocCache, version: str | None
+) -> dict[str, Any]:
+    text = _fetch(f"{PYPI_ORIGIN}/pypi/{package}/json", client, cache, package, version, "pypi")
+    try:
+        metadata = json.loads(text) if text is not None else None
+    except ValueError:
+        return {}
+    return metadata if isinstance(metadata, dict) else {}
+
+
 def _pypi_urls(
     package: str, client: httpx.Client, cache: DocCache, version: str | None
 ) -> dict[str, str]:
-    text = _fetch(f"https://pypi.org/pypi/{package}/json", client, cache, package, version, "pypi")
-    if text is None:
-        return {}
-    try:
-        urls = json.loads(text).get("info", {}).get("project_urls") or {}
-        return {str(k): str(v) for k, v in urls.items() if v}
-    except Exception as exc:
-        logger.debug("bad PyPI JSON for %s: %s", package, exc)
-        return {}
+    info = pypi_metadata(package, client, cache, version).get("info")
+    urls = info.get("project_urls") if isinstance(info, dict) else None
+    return {str(k): str(v) for k, v in urls.items() if v} if isinstance(urls, dict) else {}
 
 
 def _github_repo(urls: dict[str, str]) -> tuple[str, str] | None:
@@ -393,6 +400,20 @@ def _version_pages(raw: str, index_url: str, installed: str | None) -> list[tupl
     return [(version, url) for url, version in ranked[:MAX_VERSION_PAGES]]
 
 
+def _api_change(
+    package: str, version: Version | None, snippet: str, names: list[str]
+) -> tuple[str, str] | None:
+    if version is None:
+        return None
+    wanted = [name.removeprefix(f"{package}.") for name in names if "." in name] or names
+    for sentence in re.split(r"\n\s*\n|(?<=[.!?])\s+|\n(?=\s*[-*] )", snippet):
+        if not re.search(r"\b(?:removed|removal|changed)\b", sentence, re.IGNORECASE):
+            continue
+        if any(re.search(rf"(?<![\w.]){re.escape(name)}(?!\w)", sentence) for name in wanted):
+            return package, str(version)
+    return None
+
+
 def _release_items(
     text: str, package: str, installed: str | None, names: list[str], repo_url: str
 ) -> list[EvidenceItem]:
@@ -425,6 +446,7 @@ def _release_items(
                 title=f"{package} release {tag}",
                 content=snippets[0],
                 url=str(rel.get("html_url") or repo_url),
+                removed_in=_api_change(package, _parse_version(tag), snippets[0], names),
             )
         )
         if len(items) >= MAX_SNIPPETS:
@@ -482,10 +504,16 @@ def _changelog_evidence(
         if raw is None:
             continue
         snippets = _snippets(_page_text(raw), names, MAX_SNIPPETS)
+        version_match = _HREF_VERSION.fullmatch(urlparse(url).path.rsplit("/", 1)[-1])
+        version = _parse_version(version_match.group(1)) if version_match else None
         for snippet in snippets:
             items.append(
                 EvidenceItem(
-                    source="changelog", title=f"{package} changelog", content=snippet, url=url
+                    source="changelog",
+                    title=f"{package} changelog",
+                    content=snippet,
+                    url=url,
+                    removed_in=_api_change(package, version, snippet, names),
                 )
             )
         if not snippets:
@@ -519,6 +547,7 @@ def _version_page_items(
                         title=f"{package} {version} release notes",
                         content=snippet,
                         url=page_url,
+                        removed_in=_api_change(package, version, snippet, wanted),
                     )
                     for snippet in snippets
                 ]

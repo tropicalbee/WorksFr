@@ -79,6 +79,7 @@ class StepFinalEvent(BaseModel):
 class DoneEvent(BaseModel):
     type: Literal["done"] = "done"
     score: Score
+    published_before: date | None = None
 
 
 class FailedEvent(BaseModel):

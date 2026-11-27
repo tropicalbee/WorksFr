@@ -8,7 +8,7 @@ import pytest
 from app.config import Settings
 from app.models import ExecResult, StepKind
 from app.sandbox.docker_sandbox import MAX_REPLY_BYTES, DockerSandbox
-from app.sandbox.interface import SandboxError, StepTimeoutError
+from app.sandbox.interface import SandboxError, SandboxTampering, StepTimeoutError
 
 
 class Output:
@@ -38,7 +38,10 @@ class Input:
                 response = {"id": request["id"], "status": "ok", "stdout": "hello"}
             else:
                 response = {"id": request["id"], "status": "ok", "target_found": True}
+            response["nonce"] = request["nonce"]
             self.process.stdout.lines.put(json.dumps(response).encode() + b"\n")
+        if self.process.extra_reply:
+            self.process.stdout.lines.put(self.process.extra_reply)
         return len(line)
 
     def flush(self) -> None:
@@ -54,6 +57,7 @@ class Process:
         self.stdin = Input(self)
         self.requests: list[dict[str, Any]] = []
         self.reply: bytes | None = None
+        self.extra_reply: bytes | None = None
         self.silent = False
         self.killed = False
 
@@ -151,6 +155,32 @@ def test_storage_limits_use_settings(sandbox: DockerSandbox, commands: Commands)
     sandbox.close()
 
 
+@pytest.mark.parametrize(
+    ("gpus", "gpu_image", "image", "argument"),
+    [
+        ("", "custom-gpu", "worksfr-sandbox", None),
+        ("all", "", "worksfr-sandbox", "all"),
+        ("all", "custom-gpu", "custom-gpu", "all"),
+        ("device=0,2", "custom-gpu", "custom-gpu", '"device=0,2"'),
+    ],
+)
+def test_gpu_container_arguments(
+    commands: Commands, gpus: str, gpu_image: str, image: str, argument: str | None
+) -> None:
+    settings = Settings(_env_file=None, sandbox_gpus=gpus, sandbox_gpu_image=gpu_image)
+    sandbox = DockerSandbox(settings, "gpu-test", run=commands)
+    try:
+        sandbox.start([])
+        run = commands.calls[0]
+        assert run[-3:] == [image, "sleep", "infinity"]
+        if argument is None:
+            assert "--gpus" not in run
+        else:
+            assert run[run.index("--gpus") + 1] == argument
+    finally:
+        sandbox.close()
+
+
 def test_disconnect_failure_cleans_up(sandbox: DockerSandbox, commands: Commands) -> None:
     commands.disconnect_fails = True
     with pytest.raises(SandboxError):
@@ -243,7 +273,9 @@ def test_exec_and_probe_round_trip(sandbox: DockerSandbox, commands: Commands) -
     assert isinstance(result, ExecResult)
     assert result.stdout == "hello"
     assert sandbox.probe("p1", "json", "dump").target_found
-    assert commands.processes[0].requests[0] == {
+    request = dict(commands.processes[0].requests[0])
+    assert len(request.pop("nonce")) == 32
+    assert request == {
         "op": "exec",
         "id": "s1",
         "code": "print('hello')",
@@ -267,6 +299,28 @@ def test_bad_runner_replies(sandbox: DockerSandbox, commands: Commands, reply: b
     commands.processes[0].reply = reply
     with pytest.raises(SandboxError):
         sandbox.exec("s1", "42")
+    sandbox.close()
+
+
+@pytest.mark.parametrize("fault", ["extra", "wrong-id", "wrong-nonce", "missing-nonce", "json"])
+def test_runner_rejects_invalid_reply_envelopes(
+    sandbox: DockerSandbox, commands: Commands, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    monkeypatch.setattr("app.sandbox.docker_sandbox.token_hex", lambda _: "test-nonce")
+    sandbox.start([])
+    process = commands.processes[0]
+    if fault == "extra":
+        process.extra_reply = b"unexpected test stream record\n"
+    elif fault == "json":
+        process.reply = b"invalid json\n"
+    else:
+        envelope = {"status": "ok", "id": "different" if fault == "wrong-id" else "s1"}
+        if fault != "missing-nonce":
+            envelope["nonce"] = "different" if fault == "wrong-nonce" else "test-nonce"
+        process.reply = json.dumps(envelope).encode() + b"\n"
+    with pytest.raises(SandboxTampering):
+        sandbox.exec("s1", "42")
+    assert any(args[1] == "kill" for args in commands.calls)
     sandbox.close()
 
 
@@ -388,12 +442,15 @@ def test_protocol_errors_are_infrastructure_failures(
     sandbox: DockerSandbox,
     commands: Commands,
     operation: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr("app.sandbox.docker_sandbox.token_hex", lambda _: "test-nonce")
     sandbox.start([])
     commands.processes[0].reply = (
         json.dumps(
             {
                 "id": "r1",
+                "nonce": "test-nonce",
                 "status": "error",
                 "error": {"type": "ProtocolError", "message": "bad request"},
             }

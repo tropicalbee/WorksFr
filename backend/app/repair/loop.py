@@ -198,9 +198,14 @@ def repair_step(
     max_attempts: int = 3,
     on_attempt: Callable[[RepairAttempt], None] | None = None,
 ) -> RepairOutcome:
-    if step.decision is None or step.decision.label != Label.BROKEN or is_cascade(step.decision):
+    if step.decision is None or step.result is None:
         return RepairOutcome(None)
-    if step.result is None:
+    replacement = (
+        session.replaced_bindings(step)
+        if step.is_python and is_cascade(step.decision) and step.decision.label == Label.CANT_VERIFY
+        else None
+    )
+    if replacement is None and (step.decision.label != Label.BROKEN or is_cascade(step.decision)):
         return RepairOutcome(None)
     if max_attempts < 1:
         raise ValueError("max_attempts must be positive")
@@ -219,6 +224,19 @@ def repair_step(
         context.doc_cache,
         context_code=context.earlier_code,
     )
+    if replacement is not None:
+        max_attempts = 1
+        evidence.items.insert(
+            0,
+            EvidenceItem(
+                source="error",
+                title="Earlier replacement",
+                content=(
+                    f"Step {replacement.idx + 1}'s fix replaced these names: "
+                    f"{', '.join(replacement.names)}\n{replacement.code}"
+                ),
+            ),
+        )
     required = _required_names(step, context)
     seen = {_identity(step.block.runnable_code or "")}
     previous_result: ExecResult = step.result
@@ -244,6 +262,9 @@ def repair_step(
             evidence.items.extend(
                 item for item in more.items if item.model_dump_json() not in existing
             )
+        step.removed_api_releases.update(
+            item.removed_in for item in evidence.items if item.removed_in is not None
+        )
         try:
             proposal, provider = proposer.propose(_messages(step, context, evidence))
         except LLMUnavailableError:
@@ -276,6 +297,8 @@ def repair_step(
             on_attempt(attempt)
         if verdict in (PatchVerdict.FIXED, PatchVerdict.FIXED_UNVERIFIED):
             session.accept(step, attempt)
+            if replacement is not None:
+                step.decision = LabelDecision(label=Label.BROKEN, reason=step.result.error.message)
             return RepairOutcome(verdict)
         evidence.items.append(
             EvidenceItem(

@@ -1,11 +1,14 @@
 """Docker CLI adapter; tutorial code is sent only to the container runner."""
 
 import json
+import math
 import queue
 import re
 import subprocess
 import threading
 import time
+from collections.abc import Callable
+from secrets import token_hex
 from types import TracebackType
 from typing import BinaryIO, Protocol, Self, TypeVar
 
@@ -14,9 +17,11 @@ from pydantic import ValidationError
 from app.config import Settings
 from app.models import Environment, ExecResult, ProbeResult, StepKind
 from app.packages import normalize
-from app.sandbox.interface import SandboxError, SandboxTimeLimit, StepTimeoutError
+from app.repair.evidence import PYPI_ORIGIN
+from app.sandbox.interface import SandboxError, SandboxTampering, SandboxTimeLimit, StepTimeoutError
 
 MAX_REPLY_BYTES = 1024 * 1024
+EXTRA_REPLY_WAIT_SECONDS = 0.01
 PACKAGE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*", re.ASCII)
 NPM_NAME_PART = r"[A-Za-z0-9][A-Za-z0-9._~-]*"
 NPM_PACKAGE_NAME = re.compile(rf"(?:@{NPM_NAME_PART}/)?{NPM_NAME_PART}", re.ASCII)
@@ -83,15 +88,24 @@ class SubprocessCommands:
 
 
 class DockerSandbox:
-    def __init__(self, settings: Settings, check_id: str, run: CommandRunner | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        check_id: str,
+        run: CommandRunner | None = None,
+        *,
+        measure_package: Callable[[str, str | None], int | None] | None = None,
+    ) -> None:
         if not PACKAGE_NAME.fullmatch(check_id):
             raise SandboxError("Invalid check identifier")
         self.settings = settings
         self._check_id = check_id
         self._commands = run if run is not None else SubprocessCommands()
+        self._measure_package = measure_package
         self._generation = 0
         self._container: str | None = None
         self._process: RunnerProcess | None = None
+        self._replies: queue.Queue[bytes | Exception] | None = None
         self._packages: list[str] = []
         self._npm_packages: list[str] = []
         self._deadline: float | None = None
@@ -135,6 +149,37 @@ class DockerSandbox:
         if not packages or self._install([*command, *packages]):
             return []
         return [package for package in packages if not self._install([*command, package])]
+
+    def _python_installs(
+        self, command: list[str], packages: list[str], baseline: Environment | None
+    ) -> list[str]:
+        by_index: dict[str | None, list[str]] = {}
+        for package in packages:
+            index = self.settings.sandbox_package_indexes.get(normalize(package))
+            spec = f"{package}=={baseline.versions[package]}" if baseline else package
+            by_index.setdefault(index, []).append(spec)
+        failed = []
+        for index, specs in by_index.items():
+            pip = [*command]
+            if index is not None:
+                pip.extend(["--index-url", index, "--extra-index-url", f"{PYPI_ORIGIN}/simple"])
+            if baseline is None:
+                failed.extend(self._failed_installs([*pip, "--upgrade"], specs))
+            elif not self._install([*pip, *specs]):
+                raise SandboxError("environment could not be reproduced: pinned install failed")
+        return failed
+
+    def _oversized_packages(self, packages: list[str]) -> dict[str, int]:
+        if self._measure_package is None:
+            return {}
+        skipped = {}
+        for package in packages:
+            self._time_left(60)
+            name = normalize(package)
+            size = self._measure_package(name, self.settings.sandbox_package_indexes.get(name))
+            if size is not None and size > self.settings.sandbox_max_package_mb * 1024**2:
+                skipped[name] = math.ceil(size / 1024**2)
+        return skipped
 
     def _prepare_npm(
         self, name: str, packages: list[str], baseline: Environment | None
@@ -183,6 +228,12 @@ class DockerSandbox:
         self._container = f"worksfr-{self._check_id}-{self._generation}"
         name = self._container
         file_size_limit = self.settings.sandbox_file_size_mb * 1024 * 1024
+        image = self.settings.sandbox_image
+        gpu_args = []
+        if gpus := self.settings.sandbox_gpus:
+            # Docker parses this flag as CSV, so keep multiple device IDs in one field.
+            gpu_args = ["--gpus", f'"{gpus}"' if "," in gpus else gpus]
+            image = self.settings.sandbox_gpu_image or image
         try:
             self._require_success(
                 self._run(
@@ -214,7 +265,8 @@ class DockerSandbox:
                         "sandbox",
                         "--network",
                         "bridge",
-                        self.settings.sandbox_image,
+                        *gpu_args,
+                        image,
                         "sleep",
                         "infinity",
                     ]
@@ -224,16 +276,15 @@ class DockerSandbox:
             baseline = self._initial_environment if self._pinned_restart else None
             pip = ["docker", "exec", name, "pip", "install"]
             if baseline is not None:
-                pins = [
-                    f"{package}=={version}"
-                    for package, version in baseline.versions.items()
-                    if package not in baseline.failed_packages
-                ]
-                if pins and not self._install([*pip, *pins]):
-                    raise SandboxError("environment could not be reproduced: pinned install failed")
+                requested = [p for p in baseline.versions if p not in baseline.failed_packages]
+                self._python_installs(pip, requested, baseline)
                 failed = list(baseline.failed_packages)
+                skipped = baseline.skipped_packages
             else:
-                failed.extend(self._failed_installs([*pip, "--upgrade"], valid))
+                skipped = self._oversized_packages(valid)
+                failed.extend(package for package in valid if normalize(package) in skipped)
+                valid = [package for package in valid if normalize(package) not in skipped]
+                failed.extend(self._python_installs(pip, valid, None))
             versions = self._run(["docker", "exec", name, "python", "-c", VERSION_CODE])
             self._require_success(versions, "Version inspection")
             installed = json.loads(versions.stdout)
@@ -282,6 +333,7 @@ class DockerSandbox:
             environment = Environment(
                 versions=requested_versions,
                 failed_packages=failed,
+                skipped_packages=skipped,
                 npm_versions=npm_versions,
                 failed_npm_packages=failed_npm,
             )
@@ -298,7 +350,27 @@ class DockerSandbox:
         process = self._process
         if process is None or process.stdin is None or process.stdout is None:
             raise SandboxError("Runner is not running")
-        replies: queue.Queue[bytes | Exception] = queue.Queue(maxsize=1)
+        if self._replies is None:
+            self._replies = queue.Queue(maxsize=2)
+            replies = self._replies
+            stdout = process.stdout
+
+            def read_replies() -> None:
+                try:
+                    while line := stdout.readline(MAX_REPLY_BYTES + 1):
+                        replies.put_nowait(line)
+                    replies.put_nowait(b"")
+                except queue.Full:
+                    # Two unanswered replies already let the receiver detect an extra message.
+                    return
+                except Exception as exc:
+                    try:
+                        replies.put_nowait(exc)
+                    except queue.Full:
+                        pass
+
+            threading.Thread(target=read_replies, daemon=True).start()
+        replies = self._replies
 
         def communicate() -> None:
             try:
@@ -306,11 +378,14 @@ class DockerSandbox:
                     data = (json.dumps(request) + "\n").encode("utf-8")
                     process.stdin.write(data)
                     process.stdin.flush()
-                replies.put(process.stdout.readline(MAX_REPLY_BYTES + 1))
             except Exception as exc:
-                replies.put(exc)
+                try:
+                    replies.put_nowait(exc)
+                except queue.Full:
+                    pass
 
-        threading.Thread(target=communicate, daemon=True).start()
+        if request is not None:
+            threading.Thread(target=communicate, daemon=True).start()
         try:
             line = replies.get(timeout=timeout)
         except queue.Empty:
@@ -321,23 +396,37 @@ class DockerSandbox:
         if not line:
             raise SandboxError("Runner exited without a reply")
         if len(line) > MAX_REPLY_BYTES or not line.endswith(b"\n"):
-            raise SandboxError("Runner reply exceeds 1 MB or is not a complete line")
+            raise SandboxTampering("Runner reply exceeds 1 MB or is not a complete line")
+        if request is not None:
+            try:
+                extra = replies.get(timeout=EXTRA_REPLY_WAIT_SECONDS)
+            except queue.Empty:
+                pass
+            else:
+                if extra:
+                    raise SandboxTampering("Runner sent more than one reply")
         return line
 
     def _request(self, request: dict[str, str], schema: type[Result]) -> Result:
         if not self._usable:
             raise SandboxError("Runner is not ready; start or restart the sandbox")
         try:
+            request = {**request, "nonce": token_hex(16)}
             line = self._exchange(request, self._time_left(self.settings.step_timeout_seconds))
-            result = schema.model_validate_json(line)
-            if result.id != request["id"]:
-                raise SandboxError("Runner reply id does not match the request")
+            envelope = json.loads(line)
+            if (
+                not isinstance(envelope, dict)
+                or envelope.get("id") != request["id"]
+                or envelope.get("nonce") != request["nonce"]
+            ):
+                raise SandboxTampering("Runner reply does not match the pending request")
+            result = schema.model_validate(envelope)
             if result.error is not None and result.error.type == "ProtocolError":
                 raise SandboxError("Runner reported a protocol error")
             return result
         except (ValidationError, ValueError):
             self._kill_container()
-            raise SandboxError("Runner sent an invalid reply") from None
+            raise SandboxTampering("Runner sent an invalid reply") from None
         except SandboxError:
             self._kill_container()
             raise
@@ -375,6 +464,7 @@ class DockerSandbox:
 
     def close(self) -> None:
         self._usable = False
+        self._replies = None
         process, self._process = self._process, None
         name, self._container = self._container, None
         if process is not None:

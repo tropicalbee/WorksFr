@@ -5,6 +5,7 @@ from types import ModuleType
 
 import httpx
 import pytest
+from pydantic import ValidationError
 
 from app.config import ProviderConfig, Settings
 
@@ -344,3 +345,9 @@ def test_capture_video_transport_failure_hides_secret(
     assert list(tmp_path.iterdir()) == []
     output = capsys.readouterr()
     assert "video-secret-key" not in output.out + output.err
+
+
+@pytest.mark.parametrize("gpus", ["all; rm", "-1", "--privileged", "0", "device=0,"])
+def test_invalid_sandbox_gpus(gpus: str) -> None:
+    with pytest.raises(ValidationError, match="sandbox_gpus"):
+        Settings(_env_file=None, sandbox_gpus=gpus)

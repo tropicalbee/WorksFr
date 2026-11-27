@@ -1,10 +1,14 @@
 import logging
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Any
+from urllib.parse import urlsplit
 
 from pydantic import AliasChoices, BaseModel, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, PydanticBaseSettingsSource, SettingsConfigDict
+
+from app.packages import normalize
 
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 logger = logging.getLogger(__name__)
@@ -58,10 +62,16 @@ class Settings(BaseSettings):
     video_download_max_mb: int = Field(default=1024, ge=1)
     video_download_timeout_seconds: int = Field(default=600, ge=1)
     video_tools_image: str = "worksfr-video-tools"
+    video_tools_memory: str = "512m"
+    video_tools_cpus: float = Field(default=1.0, gt=0, allow_inf_nan=False)
+    video_tools_pids_limit: int = Field(default=128, ge=1)
+    video_tools_tmpfs_mb: int = Field(default=64, ge=1)
     video_reader_min_interval_seconds: float = Field(default=0, ge=0, allow_inf_nan=False)
 
     database_path: str = "worksfr.db"
     sandbox_image: str = "worksfr-sandbox"
+    sandbox_gpus: str = ""
+    sandbox_gpu_image: str = ""
     step_timeout_seconds: int = 60
     check_timeout_seconds: int = 900
     sandbox_memory: str = "2g"
@@ -69,11 +79,16 @@ class Settings(BaseSettings):
     sandbox_file_size_mb: int = Field(default=256, ge=1)
     sandbox_cpus: float = 2.0
     sandbox_pids_limit: int = 256
+    sandbox_max_package_mb: int = Field(default=400, ge=1)
+    sandbox_package_indexes: Annotated[dict[str, str], NoDecode] = Field(
+        default_factory=dict, repr=False
+    )
     max_concurrent_checks: int = Field(default=1, ge=1)
     max_upload_mb: int = Field(default=10, ge=1)
     max_steps: int = Field(default=150, ge=1)
 
     worksfr_api_url: str = "http://127.0.0.1:8000"
+    api_token: SecretStr = SecretStr("")
 
     cors_origins: Annotated[list[str], NoDecode] = [
         "http://localhost:5173",
@@ -127,6 +142,38 @@ class Settings(BaseSettings):
     @classmethod
     def _parse_csv(cls, value: Any) -> Any:
         return _split_csv(value)
+
+    @field_validator("sandbox_gpus")
+    @classmethod
+    def _validate_sandbox_gpus(cls, value: str) -> str:
+        if value and not re.fullmatch(r"all|[1-9][0-9]*|device=[0-9]+(?:,[0-9]+)*", value):
+            raise ValueError("use all, a positive count, or device= followed by numeric IDs")
+        return value
+
+    @field_validator("sandbox_package_indexes", mode="before")
+    @classmethod
+    def _parse_package_indexes(cls, value: Any) -> dict[str, str]:
+        entries = (
+            value.items()
+            if isinstance(value, dict)
+            else ((entry.partition("=")[0], entry.partition("=")[2]) for entry in _split_csv(value))
+        )
+        indexes: dict[str, str] = {}
+        for name, url in entries:
+            name, url = str(name).strip(), str(url).strip()
+            try:
+                parsed = urlsplit(url)
+                valid = (
+                    parsed.scheme in ("http", "https") and parsed.hostname and not parsed.fragment
+                )
+                _ = parsed.port
+            except ValueError:
+                valid = False
+            if valid and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name):
+                indexes[normalize(name)] = url
+            else:
+                logger.warning("Ignoring malformed sandbox package index entry")
+        return indexes
 
     @field_validator("video_reader_models")
     @classmethod

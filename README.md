@@ -129,6 +129,19 @@ npm run dev
 
 Open http://localhost:5173.
 
+### Machine sizes
+
+Set these values in `backend/.env`.
+
+| Machine | Settings |
+| --- | --- |
+| Weak (defaults) | `SANDBOX_MEMORY=2g`, `SANDBOX_CPUS=2`, `SANDBOX_TMPFS_MB=512`, `MAX_CONCURRENT_CHECKS=1` |
+| Normal | `SANDBOX_MEMORY=4g`, `SANDBOX_CPUS=4`, `MAX_CONCURRENT_CHECKS=2` |
+| Strong | `SANDBOX_MEMORY=8g`, `SANDBOX_CPUS=8`, `SANDBOX_TMPFS_MB=2048`, `MAX_CONCURRENT_CHECKS=4` |
+| GPU (requires an NVIDIA GPU and the NVIDIA Container Toolkit) | `SANDBOX_GPUS=all`, `SANDBOX_GPU_IMAGE=worksfr-sandbox-gpu` |
+
+Giving tutorial code access to a GPU also exposes the GPU driver, so enable it only on a machine where you are comfortable with that risk.
+
 ## Configuration
 
 Fill in your API keys and model names in `backend/.env` before you run a check. `.env.example` lists every setting with its default. Model names have no default: copy a model id from the provider's model list (build.nvidia.com, console.groq.com/docs/models or ai.google.dev/gemini-api/docs/models) into `LLM_<NAME>_MODEL`. A provider with no key or no model is skipped, and the backend log says so at startup.
@@ -219,6 +232,14 @@ Tutorial code is untrusted. It runs only inside the sandbox container, never in 
 - A step times out after 60 seconds, and a whole check after 15 minutes (`CHECK_TIMEOUT_SECONDS`, default 900).
 
 Docker is not a perfect security boundary. Run WorksFr on your own machine and don't expose it publicly.
+
+## Development
+
+Run `./scripts/security-check.ps1` from the repository root before a release.
+Enable the staged secret scan with `git config core.hooksPath .githooks`.
+
+Generate or refresh the hashed backend lock from the repository root with
+`./backend/.venv/Scripts/python.exe -m piptools compile --generate-hashes --output-file backend/requirements.lock backend/requirements.txt`.
 
 ## Run the tests
 

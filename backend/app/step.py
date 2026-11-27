@@ -26,6 +26,7 @@ class Step:
     attempts: list[RepairAttempt] = field(default_factory=list)
     accepted: RepairAttempt | None = None
     output_check: OutputCheck | None = None
+    removed_api_releases: set[tuple[str, str]] = field(default_factory=set)
 
     @property
     def idx(self) -> int:

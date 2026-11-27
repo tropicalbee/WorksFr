@@ -59,16 +59,23 @@ def _error_detail(response: httpx.Response) -> str:
 
 async def _request(method: str, path: str, **kwargs: Any) -> Any:
     base = _base_url()
+    token = get_settings().api_token.get_secret_value()
+    headers = {"Authorization": f"Bearer {token}"} if token else None
     try:
-        async with httpx.AsyncClient(base_url=base, transport=_transport, timeout=30) as client:
+        async with httpx.AsyncClient(
+            base_url=base, headers=headers, transport=_transport, timeout=30
+        ) as client:
             response = await client.request(method, path, **kwargs)
     except httpx.TransportError:
         raise WorksFrUnavailable(
             f"WorksFr's backend isn't reachable at {base}. Start it with: uvicorn app.main:app"
         ) from None
     if response.is_error:
+        detail = _error_detail(response)
+        if token:
+            detail = detail.replace(token, "[redacted]")
         raise WorksFrUnavailable(
-            f"WorksFr's backend returned HTTP {response.status_code}: {_error_detail(response)}"
+            f"WorksFr's backend returned HTTP {response.status_code}: {detail}"
         )
     return response.json()
 

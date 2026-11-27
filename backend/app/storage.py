@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS checks (
     source TEXT NOT NULL,
     title TEXT,
     published TEXT,
+    published_before TEXT,
     date_source TEXT NOT NULL,
     status TEXT NOT NULL,
     score_json TEXT,
@@ -108,6 +109,9 @@ def init_db(path: str) -> None:
         if version not in (0, 1):
             raise RuntimeError("Unsupported schema version; remove the old database file manually")
         connection.executescript(SCHEMA)
+        check_columns = {row["name"] for row in connection.execute("PRAGMA table_info(checks)")}
+        if "published_before" not in check_columns:
+            connection.execute("ALTER TABLE checks ADD COLUMN published_before TEXT")
         columns = {row["name"] for row in connection.execute("PRAGMA table_info(steps)")}
         for name, definition in (
             ("video_timestamp", "INTEGER"),
@@ -188,15 +192,16 @@ def create_check(db_path: str, report: CheckReport) -> None:
     with _connection(db_path) as connection:
         connection.execute(
             """INSERT INTO checks (
-                id, source_kind, source, title, published, date_source, status, score_json,
-                versions_json, failed_packages_json, error, created_at, finished_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                id, source_kind, source, title, published, published_before, date_source, status,
+                score_json, versions_json, failed_packages_json, error, created_at, finished_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 report.id,
                 report.source_kind,
                 report.source,
                 report.title,
                 report.published.isoformat() if report.published else None,
+                report.published_before.isoformat() if report.published_before else None,
                 report.date_source,
                 report.status,
                 report.score.model_dump_json() if report.score is not None else None,
@@ -221,6 +226,7 @@ def update_check(
     failed_packages: list[str] | None = None,
     title: str | None = None,
     published: date | None = None,
+    published_before: date | None = None,
     date_source: DateSource | None = None,
     error: str | None = None,
 ) -> None:
@@ -240,6 +246,8 @@ def update_check(
         values["title"] = title
     if published is not None:
         values["published"] = published.isoformat()
+    if published_before is not None:
+        values["published_before"] = published_before.isoformat()
     if date_source is not None:
         values["date_source"] = date_source
     if error is not None:
@@ -306,6 +314,7 @@ def _report(
         source=row["source"],
         title=row["title"],
         published=row["published"],
+        published_before=row["published_before"],
         date_source=row["date_source"],
         status=row["status"],
         created_at=row["created_at"],

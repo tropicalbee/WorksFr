@@ -149,6 +149,8 @@ export interface components {
             title?: string | null;
             /** Published */
             published?: string | null;
+            /** Published Before */
+            published_before?: string | null;
             /** @default unknown */
             date_source: components["schemas"]["DateSource"];
             status: components["schemas"]["CheckStatus"];
@@ -184,6 +186,8 @@ export interface components {
             title?: string | null;
             /** Language */
             language?: ("python" | "javascript" | "typescript" | "c" | "cpp" | "auto") | null;
+            /** Source Url */
+            source_url?: string | null;
         };
         /**
          * DateSource
@@ -198,6 +202,8 @@ export interface components {
              */
             type: "done";
             score: components["schemas"]["Score"];
+            /** Published Before */
+            published_before?: string | null;
         };
         /** EnvironmentEvent */
         EnvironmentEvent: {

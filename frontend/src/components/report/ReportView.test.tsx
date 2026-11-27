@@ -130,3 +130,56 @@ describe('tutorial pins', () => {
     expect(markup).toContain('not installed')
   })
 })
+
+describe('output comparison', () => {
+  const step: StepReport = {
+    idx: 0, kind: 'python', original_code: 'print(value)', final_code: 'print(value)',
+    label: 'works', verdict: null, reason: '', explanation: '', output: '', low_confidence: false,
+  }
+  const example = {
+    shown: '<script>alert(1)</script>', actual: '<b>printed</b>',
+    reason: 'This REPL block shows several values.', ignored: ['float digits'],
+  }
+  const report: CheckReport = { ...failedReport, status: 'done', steps: [step] }
+
+  it.each([
+    ['matches', 'Output matches'],
+    ['matches_ignoring', 'Output matches with differences ignored'],
+    ['differs', 'Output differs'],
+    ['not_compared', example.reason],
+  ] as const)('renders the %s state', (status, text) => {
+    const markup = renderToStaticMarkup(<ReportView report={{
+      ...report, steps: [{ ...step, output_check: { ...example, status } }],
+    }} />)
+    expect(markup).toContain(text)
+    if (status === 'matches_ignoring') expect(markup).toContain('Ignored float digits')
+    if (status === 'differs') {
+      expect(markup).toContain('Tutorial showed')
+      expect(markup).toContain('Run printed')
+      expect(markup).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
+      expect(markup).toContain('&lt;b&gt;printed&lt;/b&gt;')
+      expect(markup).not.toContain('<script>')
+    }
+  })
+
+  it('omits the comparison for older reports', () => {
+    const markup = renderToStaticMarkup(<ReportView report={report} />)
+    expect(markup).not.toContain('Output comparison')
+  })
+
+  it.each([
+    [0, 0, null],
+    [9, 3, 'Output differs from the tutorial in 3 of 9 steps that show output'],
+    [9, 0, 'Output matches the tutorial in all 9 steps that show output'],
+  ] as const)('summarizes %s comparisons and %s differences', (compared, differs, text) => {
+    const markup = renderToStaticMarkup(<ReportView report={{
+      ...report,
+      score: {
+        works: 9, deprecated: 0, broken: 0, cant_verify: 0, fixed: 0, fixed_unverified: 0,
+        output_compared: compared, output_differs: differs, still_run: 9, checked: 9, ratio: 1,
+      },
+    }} />)
+    if (text) expect(markup).toContain(text)
+    else expect(markup).not.toContain('steps that show output')
+  })
+})

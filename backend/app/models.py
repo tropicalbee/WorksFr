@@ -182,6 +182,8 @@ class Environment(BaseModel):
     versions: dict[str, str] = Field(default_factory=dict)
     failed_packages: list[str] = Field(default_factory=list)
     """Names pip could not install, for example an author's local module."""
+    skipped_packages: dict[str, int] = Field(default_factory=dict)
+    """Packages skipped before install with the size of the wheel in MB."""
     npm_versions: dict[str, str] = Field(default_factory=dict)
     failed_npm_packages: list[str] = Field(default_factory=list)
 
@@ -321,6 +323,8 @@ class CheckReport(BaseModel):
     source: str
     title: str | None = None
     published: date | None = None
+    published_before: date | None = None
+    """Estimated upper bound from a documented API change when no page date is available."""
     date_source: DateSource = DateSource.UNKNOWN
     status: CheckStatus
     created_at: str = ""

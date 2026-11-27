@@ -2,11 +2,15 @@
 
 import time
 from collections.abc import Callable, Collection
+from dataclasses import dataclass
 from types import TracebackType
 from typing import Self
 
 from app.config import Settings
 from app.labels import (
+    CASCADE_PREFIX,
+    REASON_GPU,
+    REASON_TAMPERING,
     cascade_decision,
     cascade_source,
     declared_names,
@@ -14,9 +18,11 @@ from app.labels import (
     label_step,
     missing_name,
     precheck,
+    replaced_error_name,
 )
 from app.models import (
     Environment,
+    ErrorInfo,
     ExecResult,
     Label,
     LabelDecision,
@@ -25,12 +31,19 @@ from app.models import (
     RepairAttempt,
     StepKind,
 )
-from app.sandbox.interface import Sandbox, SandboxError, StepTimeoutError
+from app.sandbox.interface import Sandbox, SandboxError, SandboxTampering, StepTimeoutError
 from app.step import Step
 
 
 class CheckTimeoutError(Exception):
     """The whole-check time budget has expired."""
+
+
+@dataclass(frozen=True)
+class ReplacedBindings:
+    idx: int
+    names: tuple[str, ...]
+    code: str
 
 
 class CheckSession:
@@ -50,6 +63,7 @@ class CheckSession:
         self._deadline: float | None = None
         self._ledger: list[tuple[int, StepKind, str]] = []
         self._unbound: dict[str, int] = {}
+        self._replaced: dict[str, ReplacedBindings] = {}
         self._other_unbound: dict[tuple[StepKind, str], int] = {}
         self._unverified_sources: set[int] = set()
         self._probe_id = 0
@@ -130,6 +144,12 @@ class CheckSession:
 
     def _cascade(self, step: Step, result: ExecResult) -> LabelDecision | None:
         if step.is_python:
+            name = self._replaced_name(step, result.error)
+            if name is not None and (replacement := self._replaced.get(name)) is not None:
+                return LabelDecision(
+                    label=Label.CANT_VERIFY,
+                    reason=f"{CASCADE_PREFIX}{replacement.idx + 1}, whose fix replaced {name}",
+                )
             source = cascade_source(result.error, self._unbound)
         else:
             name = missing_name(result.error, step.block.kind)
@@ -142,6 +162,13 @@ class CheckSession:
             always_unverified=not step.is_python,
         )
 
+    def _replaced_name(self, step: Step, error: ErrorInfo | None) -> str | None:
+        return replaced_error_name(error, step.executed_code or "", step.idx, self._replaced)
+
+    def replaced_bindings(self, step: Step) -> ReplacedBindings | None:
+        name = self._replaced_name(step, step.result.error) if step.result else None
+        return self._replaced.get(name) if name else None
+
     def run(self, step: Step) -> LabelDecision:
         self._check_deadline()
         if not step.runnable:
@@ -150,7 +177,10 @@ class CheckSession:
         if code is None:
             raise ValueError("Step has no runnable code")
         kind = step.block.kind
-        decision = precheck(code, kind=kind, c_system_headers=self._c_system_headers)
+        gpu_enabled = bool(self.settings.sandbox_gpus)
+        decision = precheck(
+            code, kind=kind, c_system_headers=self._c_system_headers, gpu_enabled=gpu_enabled
+        )
         if decision is not None:
             step.record_run(None, decision)
             self._record_unbound(step, decision)
@@ -158,9 +188,13 @@ class CheckSession:
         try:
             lang = StepKind.PYTHON.value if step.is_python else kind.value
             result = self.sandbox.exec(f"s{step.idx}", code, lang=lang)
-        except StepTimeoutError:
+        except (StepTimeoutError, SandboxTampering) as exc:
             self._restart(self._ledger)
-            decision = label_step(None, timed_out=True)
+            decision = (
+                LabelDecision(label=Label.CANT_VERIFY, reason=REASON_TAMPERING)
+                if isinstance(exc, SandboxTampering)
+                else label_step(None, timed_out=True)
+            )
             step.record_run(None, decision)
             self._record_unbound(step, decision)
             return decision
@@ -170,13 +204,21 @@ class CheckSession:
             result,
             kind=kind,
             failed_packages=self.environment.failed_packages,
+            skipped_packages=self.environment.skipped_packages,
             guessed_packages=self._guessed_packages,
             failed_npm_packages=self.environment.failed_npm_packages,
         )
+        if gpu_enabled and decision.reason == REASON_GPU and result.error:
+            decision = LabelDecision(
+                label=decision.label, reason=f"{REASON_GPU}: {result.error.message}"
+            )
         # Python can leave bindings behind on error. The other runners keep successful code.
         if step.is_python or result.status == "ok":
             self._ledger.append((step.idx, kind, code))
         step.record_run(result, decision)
+        if self._replaced and step.is_python and result.status == "ok":
+            for name in step.bound_names():
+                self._replaced.pop(name, None)
         self._record_unbound(step, decision, result)
         return decision
 
@@ -189,8 +231,14 @@ class CheckSession:
         self._restart(baseline)
         try:
             result = self.sandbox.exec(f"s{step.idx}-a{attempt}", code, lang=StepKind.PYTHON.value)
-        except StepTimeoutError:
+        except (StepTimeoutError, SandboxTampering) as exc:
             self._restart(baseline)
+            if isinstance(exc, SandboxTampering):
+                return (
+                    None,
+                    LabelDecision(label=Label.CANT_VERIFY, reason=REASON_TAMPERING),
+                    PatchVerdict.FAILED,
+                )
             decision, verdict = judge_patch(None, timed_out=True)
             return None, decision, verdict
         self._check_deadline()
@@ -207,6 +255,14 @@ class CheckSession:
         self._require_latest(step)
         names = step.bound_names()
         step.accept(attempt)
+        if step.is_python:
+            bound = step.bound_names()
+            for name in bound:
+                self._replaced.pop(name, None)
+            removed = tuple(sorted(names - bound))
+            replacement = ReplacedBindings(step.idx, removed, attempt.patched_code)
+            for name in removed:
+                self._replaced[name] = replacement
         self._ledger[-1] = (step.idx, step.block.kind, attempt.patched_code)
         for name in names:
             if self._unbound.get(name) == step.idx:

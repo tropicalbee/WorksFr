@@ -43,8 +43,9 @@ from app.models import (
     StepReport,
     is_runnable,
 )
-from app.packages import guessed_distributions
+from app.packages import guessed_distributions, normalize
 from app.pins import find_install_pins
+from app.release_date import release_date
 from app.repair.evidence import DocCache
 from app.repair.loop import Proposer, RepairContext, repair_step
 from app.sandbox.interface import Sandbox, SandboxTimeLimit
@@ -248,7 +249,12 @@ def run_check(
                         for package, version in environment.npm_versions.items()
                     },
                     failed_packages=[
-                        *environment.failed_packages,
+                        *(
+                            f"{package} ({size} MB, too large for the sandbox)"
+                            if (size := environment.skipped_packages.get(normalize(package)))
+                            else package
+                            for package in environment.failed_packages
+                        ),
                         *(npm_report_name(package) for package in environment.failed_npm_packages),
                     ],
                     install_pins=find_install_pins(
@@ -317,11 +323,20 @@ def run_check(
                         )
                     step.compare_output(earlier_code)
                 sink.emit(StepFinalEvent(step=_step_report(step, deps.settings.video_reads)))
+        published_before = None
+        if extraction.published is None and extraction.source_format != SourceFormat.VIDEO:
+            releases = {release for step in steps for release in step.removed_api_releases}
+            dates = (
+                release_date(package, version, deps.http_client, doc_cache)
+                for package, version in sorted(releases)
+            )
+            published_before = min((day for day in dates if day is not None), default=None)
         sink.emit(
             DoneEvent(
                 score=compute_score(
                     [_step_report(step, deps.settings.video_reads) for step in steps]
-                )
+                ),
+                published_before=published_before,
             )
         )
     except ExtractionError as exc:

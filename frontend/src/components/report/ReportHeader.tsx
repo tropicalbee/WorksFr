@@ -21,7 +21,8 @@ export function ReportHeader({ report, blocks, sample = false }: ReportHeaderPro
     return counts
   }, { works: 0, deprecated: 0, broken: 0, cant_verify: 0, fixed: 0 })
   const title = report.title || (report.status === 'failed' ? report.source : '') || 'Untitled tutorial'
-  const sourceUrl = /^https?:\/\//i.test(report.source) ? report.source : null
+  const sourceUrl = report.source_kind !== 'paste' && /^https?:\/\//i.test(report.source)
+    ? report.source : null
   const date = report.published
     ? new Intl.DateTimeFormat('en', {
       year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC',
@@ -29,6 +30,13 @@ export function ReportHeader({ report, blocks, sample = false }: ReportHeaderPro
     : null
   const completed = steps.filter(step => isRunnable(step.kind) && step.label).length
   const total = blocks.filter(block => isRunnable(block.kind)).length
+  const outputCompared = report.score?.output_compared ?? 0
+  const outputDiffers = report.score?.output_differs ?? 0
+  const outputSummary = outputDiffers
+    ? `Output differs from the tutorial in ${outputDiffers} of ${outputCompared} steps that show output`
+    : outputCompared === 1
+      ? 'Output matches the tutorial in the one step that shows output'
+      : `Output matches the tutorial in all ${outputCompared} steps that show output`
   let facts = 'No checkable steps were reported.'
   if (report.status === 'running') facts = `Checked ${completed} of ${total} steps so far`
   else if (report.score) facts = `${report.score.still_run} of ${report.score.checked} checkable steps still run`
@@ -55,6 +63,7 @@ export function ReportHeader({ report, blocks, sample = false }: ReportHeaderPro
       {report.status !== 'failed' && (
         <>
           <p className="report-facts" aria-live="polite">{facts}</p>
+          {outputCompared > 0 && <p className="metadata mt-2">{outputSummary}</p>}
           <ul className="count-row" aria-label="Step counts">
             {(['works', 'deprecated', 'broken', 'cant_verify'] as Label[]).map(label => (
               <li key={label}>

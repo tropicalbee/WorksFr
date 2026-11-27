@@ -57,3 +57,5 @@ existing captures, and refuses any reply containing the configured key. A
 `evidence/pandas_whatsnew_v3.1.0.html` is a trimmed copy of https://pandas.pydata.org/docs/whatsnew/v3.1.0.html, fetched on 2026-11-24. It keeps the title and the `MultiIndex.union()` and two `HDFStore.append()` bug-fix lines, which mention `append` without `DataFrame.append`.
 
 - `youtube/oembed_zN8QziXjd8.json` was hand-written in the YouTube oEmbed response shape.
+- `pypi/example_wheels.json` is a hand-written excerpt in the PyPI project JSON shape, with synthetic wheel filenames and sizes.
+- `pypi/pandas_dates.json` is a hand-written PyPI project JSON fixture. The pandas 2.0.0 date comes from the saved release notes. Upload times and the later release date are test values.

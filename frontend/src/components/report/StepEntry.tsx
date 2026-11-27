@@ -3,6 +3,7 @@ import type { EventBlock, StepReport } from '@/api/types'
 import { CodeBlock } from './CodeBlock'
 import { Disclosure } from './Disclosure'
 import { tokenizeInlineMarkdown } from './inlineMarkdown'
+import { OutputComparison } from './OutputComparison'
 import { ReplacementDiff } from './ReplacementDiff'
 import { StatusLabel } from './StatusLabel'
 import { formatTimestamp, videoLinkAt } from './videoLink'
@@ -77,6 +78,7 @@ export function StepEntry({ step, block, running = false, source = '' }: StepEnt
           </section>
         )}
         {accepted && <ReplacementDiff step={step} />}
+        {step && <OutputComparison step={step} />}
         {showReason && step.reason && <p className="reason">{step.reason}</p>}
         {attempts.length > 1 && (
           <Disclosure title={`${attempts.length} attempts`}>
