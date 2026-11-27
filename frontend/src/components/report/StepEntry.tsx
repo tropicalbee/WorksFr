@@ -2,6 +2,7 @@ import { Eye } from 'lucide-react'
 import type { EventBlock, StepReport } from '@/api/types'
 import { CodeBlock } from './CodeBlock'
 import { Disclosure } from './Disclosure'
+import { tokenizeInlineMarkdown } from './inlineMarkdown'
 import { ReplacementDiff } from './ReplacementDiff'
 import { StatusLabel } from './StatusLabel'
 import { formatTimestamp, videoLinkAt } from './videoLink'
@@ -68,7 +69,11 @@ export function StepEntry({ step, block, running = false, source = '' }: StepEnt
         {accepted && step.explanation && (
           <section className="explanation">
             <h3>What changed</h3>
-            <p>{step.explanation}</p>
+            <p>{tokenizeInlineMarkdown(step.explanation).map(({ kind, text }, index) => {
+              if (kind === 'code') return <code key={index}>{text}</code>
+              if (kind === 'bold') return <strong key={index}>{text}</strong>
+              return text
+            })}</p>
           </section>
         )}
         {accepted && <ReplacementDiff step={step} />}
