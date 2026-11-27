@@ -18,6 +18,30 @@ def _cell_source(cell: nbformat.NotebookNode) -> str:
     return "".join(source) if isinstance(source, list) else str(source)
 
 
+def _shown_output(cell: nbformat.NotebookNode) -> str | None:
+    pieces: list[str] = []
+    outputs = cell.get("outputs")
+    if not isinstance(outputs, list):
+        return None
+    for output in outputs:
+        if not isinstance(output, dict):
+            continue
+        kind = output.get("output_type")
+        if kind == "error":
+            return None
+        if kind == "stream" and output.get("name") == "stdout":
+            text = output.get("text")
+        elif kind == "execute_result" and isinstance(data := output.get("data"), dict):
+            text = data.get("text/plain")
+        else:
+            continue
+        if isinstance(text, list) and all(isinstance(line, str) for line in text):
+            text = "".join(text)
+        if isinstance(text, str):
+            pieces.append(text)
+    return "".join(pieces) or None
+
+
 def _title(nb: nbformat.NotebookNode) -> str | None:
     meta_title = nb.get("metadata", {}).get("title")
     if isinstance(meta_title, str) and meta_title.strip():
@@ -65,6 +89,7 @@ def parse_notebook(source: str, data: bytes, *, source_kind: SourceKind) -> Extr
                 continue
             block.idx = len(blocks)
             block.context = "\n\n".join(markdown)[-_MAX_CONTEXT_CHARS:]
+            block.shown_output = _shown_output(cell)
             blocks.append(block)
             markdown = []
 

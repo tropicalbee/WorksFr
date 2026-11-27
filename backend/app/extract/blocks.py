@@ -9,6 +9,7 @@ import ast
 import re
 import textwrap
 from dataclasses import dataclass
+from itertools import pairwise
 
 from app.models import Block, StepKind
 
@@ -183,6 +184,15 @@ def strip_repl(text: str) -> str:
     return normalize_text("\n".join(code))
 
 
+def _repl_output(text: str) -> str | None:
+    lines = (
+        line
+        for line in text.split("\n")
+        if line not in (">>>", "...") and not line.startswith((">>> ", "... "))
+    )
+    return normalize_text("\n".join(lines)) or None
+
+
 def looks_like_shell(text: str) -> bool:
     for line in text.split("\n"):
         stripped = line.strip()
@@ -240,7 +250,8 @@ def classify(text: str, hint: str | None, without_output: str | None = None) -> 
     ):
         # Keep a step for precheck and the report while withholding executable source.
         runnable = ""
-    return Block(idx=0, kind=kind, code=text, runnable_code=runnable)
+    shown = _repl_output(text) if kind == StepKind.REPL else None
+    return Block(idx=0, kind=kind, code=text, runnable_code=runnable, shown_output=shown)
 
 
 def _classify(
@@ -280,6 +291,14 @@ def build_blocks(raws: list[RawBlock]) -> list[Block]:
         block.idx = len(blocks)
         block.context = raw.context
         blocks.append(block)
+    for step, following in pairwise(blocks):
+        if (
+            step.runnable_code
+            and step.shown_output is None
+            and following.kind == StepKind.OUTPUT
+            and not following.code.startswith("Traceback (most recent call last)")
+        ):
+            step.shown_output = following.code
     return blocks
 
 

@@ -98,6 +98,8 @@ class Block(BaseModel):
     runnable_code: str | None = None
     """What gets sent to the sandbox: REPL prompts and output lines stripped, notebook
     `!` and `%` lines removed. None for kinds that never run (shell, output, other)."""
+    shown_output: str | None = None
+    """Output shown by the tutorial for this block, used only for comparison and never run."""
     context: str = ""
     """Prose or Markdown just before the block, used as context for explanations."""
     video_timestamp: int | None = None
