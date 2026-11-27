@@ -13,7 +13,7 @@ const step = (idx: number): Step => ({
 const report: Report = { id: 'test', source_kind: 'url', source: 'https://example.com', status: 'running', created_at: '2026-11-24T09:00:00+00:00', date_source: 'unknown' }
 const score: components['schemas']['Score'] = {
   works: 2, deprecated: 0, broken: 0, cant_verify: 0, fixed: 0,
-  fixed_unverified: 0, still_run: 2, checked: 2, ratio: 1,
+  fixed_unverified: 0, output_compared: 0, output_differs: 0, still_run: 2, checked: 2, ratio: 1,
 }
 const events: Event[] = [
   { type: 'extracted', blocks: [0, 1].map(idx => ({ idx, kind: 'python', code: 'x = 1', video_timestamp: null, low_confidence: false })), packages: [], title: 'Test', date_source: 'estimate', published: '2020-01-01' },

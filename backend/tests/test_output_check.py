@@ -29,6 +29,8 @@ def test_exact_match_normalizes_newlines_and_blank_lines() -> None:
         ("Done", "10/10 \u2501\u2501\u2501 6ms/step\nDone", "progress bars"),
         ("Done", "10/10 [=========>] 6ms/step\nDone", "progress bars"),
         ("col  value\n1  42", "col\tvalue\n1 42", "spacing"),
+        ("  row", "\trow", "spacing"),
+        ("time 7:05", "time 10:15", "dates and times"),
         ("0.67", "0.6712", "float digits"),
         ("[1.92695, 0.72945]", "[1.9269507873731737, 0.72945462740384615]", "float digits"),
     ],
@@ -49,6 +51,13 @@ def test_real_difference(shown: str, actual: str) -> None:
     assert comparison is not None
     assert comparison.status == OutputMatch.DIFFERS
     assert "float digits" not in comparison.ignored
+
+
+def test_difference_has_no_ignored_rules() -> None:
+    comparison = check_output("0xaaaa value 5", result("0xbbbb value 6"), "")
+    assert comparison is not None
+    assert comparison.status == OutputMatch.DIFFERS
+    assert comparison.ignored == []
 
 
 @pytest.mark.parametrize(

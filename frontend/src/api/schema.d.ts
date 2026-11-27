@@ -346,6 +346,26 @@ export interface components {
              */
             reason: string;
         };
+        /** OutputCheck */
+        OutputCheck: {
+            status: components["schemas"]["OutputMatch"];
+            /** Ignored */
+            ignored?: string[];
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /** Shown */
+            shown: string;
+            /** Actual */
+            actual: string;
+        };
+        /**
+         * OutputMatch
+         * @enum {string}
+         */
+        OutputMatch: "matches" | "matches_ignoring" | "differs" | "not_compared";
         /**
          * PatchVerdict
          * @description What a sandbox run of a patch proves (ADR-008). Decided by `labels.judge_patch`.
@@ -423,6 +443,16 @@ export interface components {
              * @default 0
              */
             fixed_unverified: number;
+            /**
+             * Output Compared
+             * @default 0
+             */
+            output_compared: number;
+            /**
+             * Output Differs
+             * @default 0
+             */
+            output_differs: number;
             /** Still Run */
             readonly still_run: number;
             /** Checked */
@@ -482,6 +512,7 @@ export interface components {
              * @default
              */
             output: string;
+            output_check?: components["schemas"]["OutputCheck"] | null;
             error?: components["schemas"]["ErrorInfo"] | null;
             /** Warnings */
             warnings?: components["schemas"]["WarningInfo"][];

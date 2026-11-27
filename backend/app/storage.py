@@ -15,6 +15,7 @@ from app.models import (
     DateSource,
     ErrorInfo,
     InstallPin,
+    OutputCheck,
     RepairAttempt,
     Score,
     StepReport,
@@ -57,6 +58,7 @@ CREATE TABLE IF NOT EXISTS steps (
     video_timestamp INTEGER,
     low_confidence INTEGER NOT NULL DEFAULT 0,
     read_agreement INTEGER,
+    output_check_json TEXT,
     UNIQUE(check_id, idx)
 );
 CREATE TABLE IF NOT EXISTS doc_cache (
@@ -111,6 +113,7 @@ def init_db(path: str) -> None:
             ("video_timestamp", "INTEGER"),
             ("low_confidence", "INTEGER NOT NULL DEFAULT 0"),
             ("read_agreement", "INTEGER"),
+            ("output_check_json", "TEXT"),
         ):
             if name not in columns:
                 connection.execute(f"ALTER TABLE steps ADD COLUMN {name} {definition}")
@@ -144,8 +147,8 @@ def _save_step(connection: sqlite3.Connection, check_id: str, step: StepReport) 
             check_id, idx, kind, original_code, final_code, label, reason,
             verdict, repair_attempts_json, apis_changed_json,
             explanation, output, error_json, warnings_json, video_timestamp, low_confidence,
-            read_agreement
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            read_agreement, output_check_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(check_id, idx) DO UPDATE SET
             kind=excluded.kind, original_code=excluded.original_code,
             final_code=excluded.final_code, label=excluded.label, reason=excluded.reason,
@@ -153,7 +156,8 @@ def _save_step(connection: sqlite3.Connection, check_id: str, step: StepReport) 
             apis_changed_json=excluded.apis_changed_json, explanation=excluded.explanation,
             output=excluded.output, error_json=excluded.error_json,
             warnings_json=excluded.warnings_json, video_timestamp=excluded.video_timestamp,
-            low_confidence=excluded.low_confidence, read_agreement=excluded.read_agreement
+            low_confidence=excluded.low_confidence, read_agreement=excluded.read_agreement,
+            output_check_json=excluded.output_check_json
         """,
         (
             check_id,
@@ -173,6 +177,7 @@ def _save_step(connection: sqlite3.Connection, check_id: str, step: StepReport) 
             step.video_timestamp,
             step.low_confidence,
             step.read_agreement,
+            step.output_check.model_dump_json() if step.output_check is not None else None,
         ),
     )
 
@@ -273,6 +278,11 @@ def _step(row: sqlite3.Row) -> StepReport:
         video_timestamp=row["video_timestamp"],
         low_confidence=row["low_confidence"],
         read_agreement=row["read_agreement"],
+        output_check=(
+            OutputCheck.model_validate_json(row["output_check_json"])
+            if row["output_check_json"]
+            else None
+        ),
     )
 
 

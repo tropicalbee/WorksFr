@@ -1,12 +1,10 @@
 """Compare tutorial output with a sandbox reply without changing the run's label."""
 
+import ast
 import re
 from decimal import Decimal, DecimalException, localcontext
-from enum import StrEnum
 
-from pydantic import BaseModel, Field
-
-from app.models import ExecResult
+from app.models import ExecResult, OutputCheck, OutputMatch
 
 _RANDOMNESS = re.compile(
     r"\brandom\s*\.|\btorch\.rand|\brandint\b|\bshuffle\s*\(|\.sample\s*\(|\buuid\w*\b"
@@ -15,7 +13,7 @@ _SEED = re.compile(
     r"\b(?:manual_seed|seed)\s*\(|\brandom_state\s*=|\bdefault_rng\s*\(\s*[+-]?\d+\s*\)"
 )
 _ADDRESS = re.compile(r"\b0x[0-9a-fA-F]{4,}\b")
-_TIME = r"\d{2}:\d{2}(?::\d{2}(?:[.,]\d+)?)?"
+_TIME = r"\d{1,2}:\d{2}(?::\d{2}(?:[.,]\d+)?)?"
 _DATE_TIME = re.compile(
     rf"(?<!\w)(?:\d{{4}}-\d{{2}}-\d{{2}}(?:[T ]{_TIME}(?:Z|[+-]\d{{2}}:?\d{{2}})?)?"
     rf"|{_TIME})(?!\w)"
@@ -24,23 +22,30 @@ _DURATION = re.compile(
     r"(?<![\w.])[+-]?(?:\d+(?:\.\d+)?|\.\d+)[ \t]*(?:s/it|it/s|ms|us|µs|μs|ns|min|s)\b"
 )
 _PROGRESS = re.compile(r"\d+%\||\u2501{2,}|={2,}>")
-_SPACING = re.compile(r"(?<=\S)[ \t]+(?=\S)")
+_SPACING = re.compile(r"[ \t]+")
 _NUMBER = re.compile(r"(?<![\w.])([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)(?![\w.])")
 
 
-class OutputMatch(StrEnum):
-    MATCHES = "matches"
-    MATCHES_IGNORING = "matches_ignoring"
-    DIFFERS = "differs"
-    NOT_COMPARED = "not_compared"
-
-
-class OutputCheck(BaseModel):
-    status: OutputMatch
-    ignored: list[str] = Field(default_factory=list)
-    reason: str = ""
-    shown: str
-    actual: str
+def repl_shows_multiple_values(code: str) -> bool:
+    try:
+        statements = ast.parse(code).body
+    except (SyntaxError, ValueError):
+        return False
+    values = 0
+    for statement in statements:
+        if not isinstance(statement, ast.Expr):
+            continue
+        value = statement.value
+        if (
+            isinstance(value, ast.Call)
+            and isinstance(value.func, ast.Name)
+            and value.func.id == "print"
+        ):
+            continue
+        values += 1
+        if values > 1:
+            return True
+    return False
 
 
 def _not_compared_reason(result: ExecResult | None, code: str) -> str:
@@ -141,6 +146,4 @@ def check_output(
             return OutputCheck(
                 status=OutputMatch.MATCHES_IGNORING, shown=shown, actual=actual, ignored=ignored
             )
-    return OutputCheck(
-        status=OutputMatch.DIFFERS, shown=shown, actual=variants[-1], ignored=ignored
-    )
+    return OutputCheck(status=OutputMatch.DIFFERS, shown=shown, actual=variants[-1])

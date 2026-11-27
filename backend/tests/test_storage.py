@@ -19,6 +19,8 @@ from app.models import (
     InstallPin,
     Label,
     LabelDecision,
+    OutputCheck,
+    OutputMatch,
     PatchVerdict,
     RepairAttempt,
     Score,
@@ -110,6 +112,7 @@ def report(check_id: str = "c1") -> CheckReport:
 def test_init_twice_and_full_round_trip(database: str) -> None:
     init_db(database)
     original = report()
+    original.steps[0].output_check = OutputCheck(status=OutputMatch.DIFFERS, shown="1", actual="2")
     create_check(database, original)
     original.steps.sort(key=lambda step: step.idx)
     loaded = get_report(database, "c1")
@@ -201,6 +204,7 @@ def test_existing_database_gains_video_fields_without_losing_rows(
     assert loaded.steps[0].original_code == "x = 1"
     assert loaded.steps[0].output == "existing output"
     assert loaded.steps[0].video_timestamp is None
+    assert loaded.steps[0].output_check is None
     assert loaded.steps[0].low_confidence is False
     assert loaded.steps[0].read_agreement is None
     with sqlite3.connect(path) as conn:

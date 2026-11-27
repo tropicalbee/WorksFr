@@ -70,7 +70,7 @@ describe('formatRecentCheck', () => {
       ...check,
       showcase_label: ' Curated title ',
       score: { works: 3, deprecated: 1, broken: 2, fixed: 0, fixed_unverified: 1, cant_verify: 4,
-        still_run: 4, checked: 6, ratio: 4 / 6 },
+        output_compared: 0, output_differs: 0, still_run: 4, checked: 6, ratio: 4 / 6 },
     }, now)).toEqual({
       title: 'Curated title', host: 'example.org', works: '3', broken: '2', fixed: '–',
       unverified: 1, cantVerify: '4', when: '2 h ago', status: '',

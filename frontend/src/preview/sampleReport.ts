@@ -28,7 +28,7 @@ export const sampleReport: CheckReport = {
   id: 'sample', source_kind: 'url', source: 'https://example.com/pandas-tutorial',
   title: 'Pandas basics: building and reshaping a DataFrame', published: '2019-03-14', date_source: 'page', status: 'done', created_at: '2026-11-24T09:00:00+00:00',
   versions: { pandas: '2.2.3', numpy: '2.1.3', matplotlib: '3.9.2' }, failed_packages: [],
-  score: { works: 3, deprecated: 1, broken: 2, cant_verify: 1, fixed: 2, fixed_unverified: 0, still_run: 4, checked: 6, ratio: 4 / 6 },
+  score: { works: 3, deprecated: 1, broken: 2, cant_verify: 1, fixed: 2, fixed_unverified: 0, output_compared: 0, output_differs: 0, still_run: 4, checked: 6, ratio: 4 / 6 },
   steps: [
     step(0, 'pip install pandas==0.24.2 matplotlib', null, { kind: 'shell', reason: "Install commands don't run. WorksFr installed the current versions listed under Checked against." }),
     step(1, 'import pandas as pd\nimport numpy as np', 'works'),

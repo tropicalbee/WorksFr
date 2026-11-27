@@ -269,6 +269,11 @@ def run_check(
                 sink.emit(StepStartedEvent(idx=step.idx))
                 if step.runnable:
                     decision = session.run(step)
+                    earlier_code = "\n".join(
+                        code
+                        for idx, kind, code in session.ledger
+                        if idx != step.idx and kind in (StepKind.PYTHON, StepKind.REPL)
+                    )
                     report = _step_report(step, deps.settings.video_reads)
                     sink.emit(
                         StepResultEvent(
@@ -283,11 +288,7 @@ def run_check(
                     if step.is_python and not unavailable and not out_of_time:
                         context = RepairContext(
                             title=extraction.title,
-                            earlier_code="\n".join(
-                                code
-                                for idx, kind, code in session.ledger
-                                if idx != step.idx and kind in (StepKind.PYTHON, StepKind.REPL)
-                            ),
+                            earlier_code=earlier_code,
                             versions=environment.versions,
                             failed_packages=environment.failed_packages,
                             settings=deps.settings,
@@ -314,6 +315,7 @@ def run_check(
                             if step.block.low_confidence
                             else skipped_reason
                         )
+                    step.compare_output(earlier_code)
                 sink.emit(StepFinalEvent(step=_step_report(step, deps.settings.video_reads)))
         sink.emit(
             DoneEvent(

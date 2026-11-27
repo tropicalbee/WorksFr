@@ -225,6 +225,21 @@ class RepairAttempt(BaseModel):
 # Report
 
 
+class OutputMatch(StrEnum):
+    MATCHES = "matches"
+    MATCHES_IGNORING = "matches_ignoring"
+    DIFFERS = "differs"
+    NOT_COMPARED = "not_compared"
+
+
+class OutputCheck(BaseModel):
+    status: OutputMatch
+    ignored: list[str] = Field(default_factory=list)
+    reason: str = ""
+    shown: str
+    actual: str
+
+
 class Score(BaseModel):
     works: int = 0
     deprecated: int = 0
@@ -234,6 +249,8 @@ class Score(BaseModel):
     """Broken steps with verdict FIXED. They stay counted under broken."""
     fixed_unverified: int = 0
     """Broken steps with verdict FIXED_UNVERIFIED. They stay counted under broken."""
+    output_compared: int = 0
+    output_differs: int = 0
 
     @computed_field
     @property
@@ -271,6 +288,8 @@ class StepReport(BaseModel):
     """The accepted patch's explanation."""
     apis_changed: list[str] = Field(default_factory=list)
     output: str = ""
+    output_check: OutputCheck | None = None
+    """Comparison with the output shown in the tutorial, when available."""
     error: ErrorInfo | None = None
     warnings: list[WarningInfo] = Field(default_factory=list)
     video_timestamp: int | None = None

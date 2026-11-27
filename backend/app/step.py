@@ -8,11 +8,14 @@ from app.models import (
     ExecResult,
     Extraction,
     LabelDecision,
+    OutputCheck,
+    OutputMatch,
     PatchVerdict,
     RepairAttempt,
     StepKind,
     StepReport,
 )
+from app.output_check import check_output, repl_shows_multiple_values
 
 
 @dataclass
@@ -22,6 +25,7 @@ class Step:
     decision: LabelDecision | None = None
     attempts: list[RepairAttempt] = field(default_factory=list)
     accepted: RepairAttempt | None = None
+    output_check: OutputCheck | None = None
 
     @property
     def idx(self) -> int:
@@ -49,6 +53,26 @@ class Step:
     @property
     def executed_code(self) -> str | None:
         return self.accepted.patched_code if self.accepted else self.block.runnable_code
+
+    @property
+    def final_result(self) -> ExecResult | None:
+        return self.accepted.result if self.accepted else self.result
+
+    def compare_output(self, earlier_code: str) -> None:
+        shown, final = self.block.shown_output, self.final_result
+        if shown is None or final is None:
+            return
+        if self.block.kind == StepKind.REPL and repl_shows_multiple_values(
+            self.block.runnable_code or ""
+        ):
+            self.output_check = OutputCheck(
+                status=OutputMatch.NOT_COMPARED,
+                reason="This REPL block shows several values, but only the last one is captured.",
+                shown=shown,
+                actual=final.stdout,
+            )
+            return
+        self.output_check = check_output(shown, final, self.executed_code or "", earlier_code)
 
     @property
     def display_code(self) -> str:
@@ -115,7 +139,7 @@ class Step:
         return names
 
     def to_report(self) -> StepReport:
-        final = self.accepted.result if self.accepted else self.result
+        final = self.final_result
         output = final.stdout if final else ""
         if final and final.stderr:
             output += ("\n\n" if output else "") + final.stderr
@@ -138,6 +162,7 @@ class Step:
             explanation=self.accepted.explanation if self.accepted else "",
             apis_changed=self.accepted.apis_changed if self.accepted else [],
             output=output,
+            output_check=self.output_check,
             error=final.error if final else None,
             warnings=final.warnings if final else [],
         )
