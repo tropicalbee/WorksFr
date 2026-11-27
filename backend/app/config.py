@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     video_chunk_seconds: int = Field(default=300, ge=1)
     video_max_minutes: int = Field(default=60, ge=1)
     video_reads: int = Field(default=2, ge=1, le=3)
+    video_debug_dir: str = ""
+    video_download: bool = False
+    video_download_max_mb: int = Field(default=1024, ge=1)
+    video_download_timeout_seconds: int = Field(default=600, ge=1)
+    video_tools_image: str = "worksfr-video-tools"
     video_reader_min_interval_seconds: float = Field(default=0, ge=0, allow_inf_nan=False)
 
     database_path: str = "worksfr.db"

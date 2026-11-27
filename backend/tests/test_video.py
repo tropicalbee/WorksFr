@@ -20,6 +20,7 @@ from app.extract.video import (
     VideoReader,
     deduplicate,
     extract_video,
+    merge_reads,
     parse_reply,
     redact_code,
 )
@@ -175,7 +176,19 @@ def test_each_saved_reply_parses_as_typed_blocks(filename: str) -> None:
             [block("x = 1  \n\n\nprint(x)"), block("x = 1\n\nprint(x)", at=3)],
             [(0, "x = 1\n\nprint(x)")],
         ),
-        ([block("x = 1"), block("x = 1\nprint(x)", at=5)], [(5, "x = 1\nprint(x)")]),
+        ([block("x = 1"), block("x = 1\nprint(x)", at=5)], [(0, "x = 1\nprint(x)")]),
+        (
+            [block("a", at=280), block("a\nb", at=300), block("a\nb\nc", at=320)],
+            [(280, "a\nb\nc")],
+        ),
+        (
+            [block("a", at=10), block("a\nb", at=40), block("a\nb\nc", at=70)],
+            [(10, "a\nb\nc")],
+        ),
+        (
+            [block("a", at=10), block("other", at=20), block("a\nb", at=40)],
+            [(10, "a\nb"), (20, "other")],
+        ),
         ([block("b = 2", at=8), block("a = 1", at=2)], [(2, "a = 1"), (8, "b = 2")]),
         ([block("x = 1\nprint(x)"), block("x = 1", at=5)], [(0, "x = 1\nprint(x)"), (5, "x = 1")]),
     ],
@@ -195,6 +208,48 @@ def test_dedup_does_not_compare_different_block_kinds() -> None:
         ]
     )
     assert len(result) == 2
+
+
+def test_merge_reads_groups_blocks_by_first_sighting() -> None:
+    reads = [
+        deduplicate(
+            [
+                VideoBlock.model_validate(block("a", at=10)),
+                VideoBlock.model_validate(block("a\nb", at=last)),
+            ]
+        )
+        for last in (30, 60)
+    ]
+    assert [(item.start_seconds, count) for item, count in merge_reads(reads)] == [(10, 2)]
+
+
+@pytest.mark.parametrize("mode", ["enabled", "unwritable", "disabled"])
+def test_video_debug_reply(
+    settings: Settings, tmp_path: Path, caplog: pytest.LogCaptureFixture, mode: str
+) -> None:
+    settings.video_max_minutes = 5
+    destination = tmp_path / "replies"
+    if mode == "unwritable":
+        destination.write_text("Existing regular file", encoding="utf-8")
+    if mode != "disabled":
+        settings.video_debug_dir = str(destination)
+    payload = reply([block(f'token = "{KEY}"')])
+    with httpx.Client(
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, json=payload))
+    ) as http:
+        assert VideoReader(settings, http).extract(URL).blocks
+
+    if mode == "enabled":
+        (path,) = destination.iterdir()
+        assert path.name == "CbpsDMwFG2g-0-300-read1-reader-test-model.json"
+        saved = path.read_text(encoding="utf-8")
+        assert KEY not in saved
+        assert "<redacted>" in saved
+        assert parse_reply(json.loads(saved)).blocks
+    elif mode == "unwritable":
+        assert any("Could not save video reply" in record.message for record in caplog.records)
+    else:
+        assert not list(tmp_path.iterdir())
 
 
 def test_two_chunks_then_end_marker_and_cross_boundary_growth(settings: Settings) -> None:
@@ -221,7 +276,7 @@ def test_two_chunks_then_end_marker_and_cross_boundary_growth(settings: Settings
     ]
     assert len(result.blocks) == 1
     assert result.blocks[0].code == "x = 1\nprint(x)"
-    assert result.blocks[0].video_timestamp == 302
+    assert result.blocks[0].video_timestamp == 290
 
 
 def test_interactions_past_end_reply_ends_the_video(fallback_settings: Settings) -> None:

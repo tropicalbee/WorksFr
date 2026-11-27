@@ -39,8 +39,11 @@ def config(**overrides: object) -> Settings:
 
 
 def metadata(description: str) -> dict[str, object]:
-    # hand-made, replace with capture
-    return {"items": [{"snippet": {"description": description, "channelId": "author"}}]}
+    return {
+        "items": [
+            {"snippet": {"description": description, "channelId": "author", "title": "Video"}}
+        ]
+    }
 
 
 def notebook() -> bytes:
@@ -109,6 +112,8 @@ def test_description_notebook_avoids_video_reader(caplog: pytest.LogCaptureFixtu
         )
     assert sink.events[-1].type == "done"
     assert sandbox.codes == ["x = 1"]
+    assert sink.events[0].type == "extracted"
+    assert sink.events[0].title == "Video"
     steps = [event.step for event in sink.events if event.type == "step_final"]
     assert all(not step.low_confidence and step.video_timestamp is None for step in steps)
     assert all(request.url.host != "video.test" for request in requests)

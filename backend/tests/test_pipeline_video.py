@@ -23,6 +23,11 @@ WATCH_URL = "https://www.youtube.com/watch?v=CbpsDMwFG2g"
 MISREAD = "This step may have been misread from the video."
 
 
+@pytest.fixture(autouse=True)
+def public_addresses(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.extract.fetch.resolve_host", lambda _: ["93.184.216.34"])
+
+
 class Sink:
     def __init__(self) -> None:
         self.events: list[CheckEvent] = []
@@ -127,7 +132,13 @@ def run_video(
     config: Settings | None = None,
 ) -> tuple[Sink, FakeSandbox]:
     sink, sandbox = Sink(), FakeSandbox(broken)
-    with httpx.Client(transport=httpx.MockTransport(respond)) as http:
+
+    def with_oembed(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/oembed":
+            return httpx.Response(404)
+        return respond(request)
+
+    with httpx.Client(transport=httpx.MockTransport(with_oembed)) as http:
         deps = PipelineDeps(
             config or settings(),
             lambda _: sandbox,
@@ -234,6 +245,8 @@ def test_video_pacing_is_shared_across_checks() -> None:
         now += seconds
 
     def respond(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/oembed":
+            return httpx.Response(404)
         sent.append(now)
         return reply()
 

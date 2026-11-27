@@ -17,7 +17,8 @@ from app.pipeline import PipelineDeps, run_check
 FIXTURES = Path(__file__).parent / "fixtures" / "video"
 
 
-def test_saved_video_pip_output_reaches_environment_pins() -> None:
+def test_saved_video_pip_output_reaches_environment_pins(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.extract.fetch.resolve_host", lambda _: ["93.184.216.34"])
     replies = iter(
         [
             httpx.Response(
@@ -36,7 +37,11 @@ def test_saved_video_pip_output_reaches_environment_pins() -> None:
         video_reader_model="test-model",
     )
     sink = Sink()
-    with httpx.Client(transport=httpx.MockTransport(lambda _: next(replies))) as http:
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404) if request.url.path == "/oembed" else next(replies)
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as http:
         deps = PipelineDeps(
             config, lambda _: FakeSandbox(), UnavailableProposer(), http, PrivateCache()
         )

@@ -55,3 +55,5 @@ existing captures, and refuses any reply containing the configured key. A
 `evidence/pandas_whatsnew_index.html` and `evidence/pandas_whatsnew_v2.0.0.html` are trimmed copies of https://pandas.pydata.org/docs/whatsnew/index.html and https://pandas.pydata.org/docs/whatsnew/v2.0.0.html, fetched on 2026-11-24. The index keeps only the toctree links to the 2.x and 3.x version pages. The v2.0.0 page keeps the title and three items of "Removal of prior version deprecations/changes", including the `DataFrame.append()` removal note that points to `concat()`.
 
 `evidence/pandas_whatsnew_v3.1.0.html` is a trimmed copy of https://pandas.pydata.org/docs/whatsnew/v3.1.0.html, fetched on 2026-11-24. It keeps the title and the `MultiIndex.union()` and two `HDFStore.append()` bug-fix lines, which mention `append` without `DataFrame.append`.
+
+- `youtube/oembed_zN8QziXjd8.json` was hand-written in the YouTube oEmbed response shape.

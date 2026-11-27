@@ -16,7 +16,7 @@ from bs4 import BeautifulSoup
 from app.config import Settings
 from app.extract import extract_url
 from app.extract.errors import ExtractionError
-from app.extract.fetch import MAX_DOWNLOAD_BYTES
+from app.extract.fetch import MAX_DOWNLOAD_BYTES, check_url
 from app.extract.routing import route_url
 from app.models import Extraction, StepKind
 
@@ -57,6 +57,36 @@ _GITHUB = {"github.com", "www.github.com"}
 class LinkedCodeResult:
     extraction: Extraction | None = None
     login_blocked: bool = False
+    snippet: dict[str, Any] | None = None
+
+
+def video_title(
+    url: str, settings: Settings, client: httpx.Client, snippet: dict[str, Any] | None = None
+) -> str | None:
+    """Read the video's title without making title lookup a requirement for extraction."""
+    key = settings.youtube_api_key.get_secret_value()
+    title = snippet.get("title") if snippet else None
+    if isinstance(title, str) and title.strip() and not (key and _contains_key(title, key)):
+        return title.strip()[:200]
+    endpoint = "https://www.youtube.com/oembed"
+    try:
+        route = route_url(url)
+        if route.kind != "video":
+            return None
+        check_url(endpoint)
+        response = client.get(
+            endpoint,
+            params={"url": route.fetch_urls[0], "format": "json"},
+            timeout=10,
+            follow_redirects=False,
+        )
+        if response.status_code != 200:
+            return None
+        data = _json_without_key(response, key) if key else response.json()
+        title = data.get("title") if isinstance(data, dict) else None
+        return (title.strip()[:200] or None) if isinstance(title, str) else None
+    except (ExtractionError, httpx.HTTPError, ValueError):
+        return None
 
 
 class _KeyLogFilter(logging.Filter):
@@ -290,19 +320,22 @@ def extract_youtube_links(url: str, settings: Settings, client: httpx.Client) ->
     if metadata is None:
         return LinkedCodeResult()
     videos, comments = metadata
+    snippet = None
     try:
         snippet = videos["items"][0]["snippet"]
+        if not isinstance(snippet, dict):
+            return LinkedCodeResult()
         texts = [snippet.get("description", "")]
         author = snippet["channelId"]
         if not isinstance(author, str) or not author:
-            return LinkedCodeResult()
+            return LinkedCodeResult(snippet=snippet)
         for item in comments.get("items", []):
             comment = item.get("snippet", {}).get("topLevelComment", {}).get("snippet", {})
             if comment.get("authorChannelId", {}).get("value") == author:
                 texts.append(comment.get("textOriginal") or comment.get("textDisplay", ""))
         links = candidate_links(text for text in texts if isinstance(text, str))
     except (KeyError, IndexError, TypeError, AttributeError):
-        return LinkedCodeResult()
+        return LinkedCodeResult(snippet=snippet)
     login_blocked = False
     with redact_api_key_logs(key), httpx.Client(transport=_LinkedTransport(client)) as linked:
         for link in links:
@@ -326,5 +359,5 @@ def extract_youtube_links(url: str, settings: Settings, client: httpx.Client) ->
             for block in extraction.blocks:
                 block.low_confidence = False
                 block.video_timestamp = None
-            return LinkedCodeResult(extraction, login_blocked)
-    return LinkedCodeResult(login_blocked=login_blocked)
+            return LinkedCodeResult(extraction, login_blocked, snippet)
+    return LinkedCodeResult(login_blocked=login_blocked, snippet=snippet)

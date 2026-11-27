@@ -33,7 +33,7 @@ from app.extract import (
 from app.extract.libs import imported_modules, packages_from_shell
 from app.extract.routing import route_url
 from app.extract.video import VideoReader
-from app.extract.youtube_links import LOGIN_NOTE, extract_youtube_links
+from app.extract.youtube_links import LOGIN_NOTE, extract_youtube_links, video_title
 from app.models import (
     Block,
     Label,
@@ -166,6 +166,11 @@ def run_check(
                 extraction = linked.extraction or deps.video_reader.extract(
                     route.fetch_urls[0], on_wait=on_wait
                 )
+                if not extraction.title:
+                    title = video_title(
+                        route.fetch_urls[0], deps.settings, deps.http_client, linked.snippet
+                    )
+                    extraction.title = _redact(title, deps.settings) if title else None
                 if linked.extraction is None:
                     for block in extraction.blocks:
                         block.code = _redact(block.code, deps.settings)

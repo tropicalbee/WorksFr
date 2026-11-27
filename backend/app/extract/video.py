@@ -5,6 +5,7 @@ import logging
 import re
 import time
 from collections.abc import Callable
+from pathlib import Path
 from typing import Literal
 
 import httpx
@@ -163,17 +164,22 @@ def deduplicate(blocks: list[VideoBlock]) -> list[VideoBlock]:
         if any(old.kind == block.kind and old.code == code for old in kept):
             continue
         lines = code.splitlines()
-        kept = [
-            old
-            for old in kept
-            if not (
+        remaining: list[VideoBlock] = []
+        earliest = block.start_seconds
+        for old in kept:
+            old_lines = old.code.splitlines()
+            if (
                 old.kind == block.kind
-                and len(old.code.splitlines()) < len(lines)
-                and old.code.splitlines() == lines[: len(old.code.splitlines())]
-            )
-        ]
+                and len(old_lines) < len(lines)
+                and old_lines == lines[: len(old_lines)]
+            ):
+                earliest = min(earliest, old.start_seconds)
+            else:
+                remaining.append(old)
+        kept = remaining
+        block = block.model_copy(update={"start_seconds": earliest})
         kept.append(block)
-    return kept
+    return sorted(kept, key=lambda block: block.start_seconds)
 
 
 READ_WINDOW_SECONDS = 15
@@ -255,6 +261,7 @@ class VideoReader:
         on_wait: WaitCallback | None,
         *,
         model: str,
+        number: int,
         retry_quota: bool,
     ) -> VideoReply | None:
         settings = self._settings
@@ -307,6 +314,8 @@ class VideoReader:
                     f"The video reader request failed (HTTP {response.status_code})."
                 )
             try:
+                if settings.video_debug_dir:
+                    self._save_reply(response.text, url, start, end, number, model)
                 return parse_reply(response.json())
             except ValueError as exc:
                 if attempt:
@@ -321,14 +330,40 @@ class VideoReader:
                 )
         raise AssertionError("Unreachable video parsing state")
 
+    def _save_reply(
+        self, text: str, url: str, start: int, end: int, number: int, model: str
+    ) -> None:
+        key = self._settings.video_reader_api_key.get_secret_value()
+        identifier = url.rsplit("=", 1)[-1]
+        safe_model = re.sub(r"[^A-Za-z0-9_.-]", "_", redact_code(model, key))[:100]
+        try:
+            folder = Path(self._settings.video_debug_dir)
+            folder.mkdir(parents=True, exist_ok=True)
+            path = folder / f"{identifier}-{start}-{end}-read{number}-{safe_model}.json"
+            path.write_text(redact_code(text, key), encoding="utf-8")
+        except (OSError, ValueError) as exc:
+            logger.warning("Could not save video reply (%s).", type(exc).__name__)
+
     def _read_chunk(
-        self, url: str, start: int, end: int, on_wait: WaitCallback | None, model_index: int
+        self,
+        url: str,
+        start: int,
+        end: int,
+        on_wait: WaitCallback | None,
+        model_index: int,
+        number: int,
     ) -> tuple[VideoReply | None, int]:
         models = self._settings.video_reader_models
         for index in range(model_index, len(models)):
             try:
                 reply = self._chunk(
-                    url, start, end, on_wait, model=models[index], retry_quota=len(models) == 1
+                    url,
+                    start,
+                    end,
+                    on_wait,
+                    model=models[index],
+                    number=number,
+                    retry_quota=len(models) == 1,
                 )
             except _VideoModelUnavailable as exc:
                 status = exc.status_code
@@ -379,7 +414,9 @@ class VideoReader:
             end = min(start + settings.video_chunk_seconds, cap)
             finished = False
             for number in range(reads):
-                reply, model_index = self._read_chunk(url, start, end, on_wait, model_index)
+                reply, model_index = self._read_chunk(
+                    url, start, end, on_wait, model_index, number + 1
+                )
                 if reply is None:
                     finished = True
                     break
