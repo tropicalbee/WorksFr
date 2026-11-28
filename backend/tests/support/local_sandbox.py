@@ -48,6 +48,7 @@ class LocalRunnerSandbox:
                 **os.environ,
                 "WORKSFR_CAPTURE_DIR": str(captures),
                 "PYTHONDONTWRITEBYTECODE": "1",
+                "WORKSFR_FILE_SIZE_BYTES": str(self.settings.sandbox_file_size_mb * 1024 * 1024),
             },
         )
         try:

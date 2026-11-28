@@ -125,7 +125,7 @@ def test_limits_and_preparation_order(sandbox: DockerSandbox, commands: Commands
     for flag, value in {
         "--memory": "2g",
         "--memory-swap": "2g",
-        "--ulimit": "fsize=268435456:268435456",
+        "--ulimit": "fsize=1073741824:1073741824",
         "--tmpfs": "/tmp:rw,exec,nosuid,nodev,size=512m,mode=1777",
         "--cpus": "2.0",
         "--pids-limit": "256",
@@ -147,11 +147,29 @@ def test_storage_limits_use_settings(sandbox: DockerSandbox, commands: Commands)
     sandbox.settings.sandbox_memory = "1g"
     sandbox.settings.sandbox_tmpfs_mb = 320
     sandbox.settings.sandbox_file_size_mb = 128
+    sandbox.settings.sandbox_install_file_size_mb = 512
     sandbox.start([])
     run = commands.calls[0]
     assert run[run.index("--memory") + 1] == run[run.index("--memory-swap") + 1] == "1g"
-    assert run[run.index("--ulimit") + 1] == "fsize=134217728:134217728"
+    assert run[run.index("--ulimit") + 1] == "fsize=536870912:536870912"
+    launch = commands.calls[-1]
+    assert launch[launch.index("-e") + 1] == "WORKSFR_FILE_SIZE_BYTES=134217728"
     assert run[run.index("--tmpfs") + 1] == "/tmp:rw,exec,nosuid,nodev,size=320m,mode=1777"
+    sandbox.close()
+
+
+def test_container_limit_is_never_below_the_tutorial_limit(
+    sandbox: DockerSandbox, commands: Commands
+) -> None:
+    sandbox.settings.sandbox_file_size_mb = 2048
+    sandbox.settings.sandbox_install_file_size_mb = 512
+    sandbox.start([])
+    assert (
+        commands.calls[0][commands.calls[0].index("--ulimit") + 1] == "fsize=2147483648:2147483648"
+    )
+    assert commands.calls[-1][commands.calls[-1].index("-e") + 1] == (
+        "WORKSFR_FILE_SIZE_BYTES=2147483648"
+    )
     sandbox.close()
 
 

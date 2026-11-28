@@ -227,7 +227,12 @@ class DockerSandbox:
         self._generation += 1
         self._container = f"worksfr-{self._check_id}-{self._generation}"
         name = self._container
-        file_size_limit = self.settings.sandbox_file_size_mb * 1024 * 1024
+        # The container allows the larger install limit; the runner lowers it to the tutorial one.
+        container_file_limit = (
+            max(self.settings.sandbox_install_file_size_mb, self.settings.sandbox_file_size_mb)
+            * 1024
+            * 1024
+        )
         image = self.settings.sandbox_image
         gpu_args = []
         if gpus := self.settings.sandbox_gpus:
@@ -250,7 +255,7 @@ class DockerSandbox:
                         "--memory-swap",
                         self.settings.sandbox_memory,
                         "--ulimit",
-                        f"fsize={file_size_limit}:{file_size_limit}",
+                        f"fsize={container_file_limit}:{container_file_limit}",
                         "--tmpfs",
                         f"/tmp:rw,exec,nosuid,nodev,size={self.settings.sandbox_tmpfs_mb}m,mode=1777",
                         "--cpus",
@@ -300,6 +305,8 @@ class DockerSandbox:
                     "docker",
                     "exec",
                     "-i",
+                    "-e",
+                    f"WORKSFR_FILE_SIZE_BYTES={self.settings.sandbox_file_size_mb * 1024 * 1024}",
                     name,
                     "python",
                     "-u",

@@ -29,6 +29,7 @@ def test_defaults() -> None:
     assert s.sandbox_memory == "2g"
     assert s.sandbox_tmpfs_mb == 512
     assert s.sandbox_file_size_mb == 256
+    assert s.sandbox_install_file_size_mb == 1024
     assert s.sandbox_cpus == 2.0
     assert s.sandbox_pids_limit == 256
     assert s.tavily_api_key.get_secret_value() == ""

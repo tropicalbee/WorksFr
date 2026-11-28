@@ -31,6 +31,7 @@ from sandbox.runner import (
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNNER = ROOT / "sandbox" / "runner.py"
+FILE_LIMIT = 64 * 1024 * 1024
 NODE_REDECLARATION = (
     "/home/sandbox/work/example.cjs:4\nconst value = 42;\n      ^\n\n"
     "SyntaxError: Identifier 'value' has already been declared\n"
@@ -487,6 +488,7 @@ class RunnerTests(unittest.TestCase):
                 "PYTHONDONTWRITEBYTECODE": "1",
                 "PYTHONPATH": str(self.work),
                 "WORKSFR_CAPTURE_DIR": str(self.capture_dir),
+                "WORKSFR_FILE_SIZE_BYTES": str(FILE_LIMIT),
             },
             text=True,
             encoding="utf-8",
@@ -531,6 +533,41 @@ class RunnerTests(unittest.TestCase):
 
     def execute(self, code: str, step_id: str = "s1") -> dict:
         return self.request({"op": "exec", "id": step_id, "code": code})
+
+    @unittest.skipIf(
+        sys.platform == "win32" or os.geteuid() == 0, "needs POSIX and a non-root user"
+    )
+    def test_file_size_limit_is_soft_and_hard_and_cannot_be_raised(self) -> None:
+        reply = self.execute(
+            "import resource\n"
+            "before = resource.getrlimit(resource.RLIMIT_FSIZE)\n"
+            "try:\n"
+            "    resource.setrlimit(resource.RLIMIT_FSIZE, (before[0] * 2, before[0] * 2))\n"
+            "    raised = True\n"
+            "except (ValueError, OSError):\n"
+            "    raised = False\n"
+            "(before, raised)"
+        )
+        self.assertEqual(reply["result"], f"(({FILE_LIMIT}, {FILE_LIMIT}), False)")
+
+    def test_runner_refuses_to_start_without_a_valid_file_size_limit(self) -> None:
+        for value in (None, "", "0", "-5", "abc", "1.5"):
+            env = {k: v for k, v in os.environ.items() if k != "WORKSFR_FILE_SIZE_BYTES"}
+            if value is not None:
+                env["WORKSFR_FILE_SIZE_BYTES"] = value
+            done = subprocess.run(
+                [sys.executable, "-u", str(RUNNER)],
+                input="",
+                capture_output=True,
+                text=True,
+                timeout=20,
+                env=env,
+                cwd=self.work,
+            )
+            with self.subTest(value=value):
+                self.assertNotEqual(done.returncode, 0)
+                self.assertNotIn("ready", done.stdout)
+                self.assertIn("WORKSFR_FILE_SIZE_BYTES", done.stderr)
 
     def test_ready_and_persistent_namespace(self) -> None:
         self.assertEqual(self.ready["op"], "ready")
@@ -647,6 +684,56 @@ class RunnerTests(unittest.TestCase):
         )
         threading.Event().wait(0.5)
         self.assertEqual(self.execute("42")["result"], "42")
+
+    FIND_PROTOCOL_FD = (
+        "import json, os, stat\n"
+        "forged = json.dumps({'id': 's2', 'nonce': 'n2', 'status': 'ok', 'result': '999'})\n"
+        "forged = (forged + '\\n').encode()\n"
+        "fds = []\n"
+        "for fd in range(3, 64):\n"
+        "    try:\n"
+        "        if stat.S_ISFIFO(os.fstat(fd).st_mode):\n"
+        "            fds.append(fd)\n"
+        "    except OSError:\n"
+        "        pass\n"
+        "def forge():\n"
+        "    for fd in fds:\n"
+        "        try:\n"
+        "            os.write(fd, forged)\n"
+        "        except OSError:\n"
+        "            pass\n"
+    )
+
+    def test_forged_reply_for_the_next_request_is_distinguishable(self) -> None:
+        # fd 1 points at the null device, so a write there never reaches the backend.
+        # Step code can still find the private protocol fd and write to it. The runner cannot
+        # stop that, so the backend must reject the extra line. The real reply keeps its own
+        # id and nonce, and the forged line comes first and never carries the real nonce.
+        assert self.process.stdin is not None
+        code = self.FIND_PROTOCOL_FD + "os.write(1, forged)\n" + "forge()\n"
+        self.process.stdin.write(
+            json.dumps({"op": "exec", "id": "s1", "nonce": "n1", "code": code}) + "\n"
+        )
+        self.process.stdin.flush()
+        lines = [self.reply(), self.reply()]
+        self.assertEqual([line["nonce"] for line in lines], ["n2", "n1"])
+        self.assertEqual(lines[0]["id"], "s2")
+        self.assertEqual((lines[1]["id"], lines[1]["status"]), ("s1", "ok"))
+        self.assertTrue(self.lines.empty())
+
+    def test_forged_reply_from_a_background_thread_arrives_after_the_real_reply(self) -> None:
+        code = (
+            self.FIND_PROTOCOL_FD + "import threading\n" + "threading.Timer(0.3, forge).start()\n"
+        )
+        reply = self.request({"op": "exec", "id": "s1", "nonce": "n1", "code": code})
+        self.assertEqual((reply["id"], reply["nonce"], reply["status"]), ("s1", "n1", "ok"))
+        threading.Event().wait(0.8)
+        # The backend's next request would read this line instead of the real reply. Its id and
+        # nonce differ from the pending request's, and the extra-line check sees it too.
+        late = self.reply()
+        self.assertEqual((late["id"], late["nonce"], late["result"]), ("s2", "n2", "999"))
+        real = self.request({"op": "exec", "id": "s3", "nonce": "n3", "code": "1"})
+        self.assertEqual((real["id"], real["nonce"]), ("s3", "n3"))
 
     def test_logging_stream_references_survive_steps(self) -> None:
         self.execute(

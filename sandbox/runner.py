@@ -30,6 +30,7 @@ RESULT_LIMIT = 8 * 1024
 MAX_REPLY_BYTES = 1024 * 1024
 TRUNCATION = b"\n[truncated]"
 RUNNER_PATH = __file__
+FILE_SIZE_ENV = "WORKSFR_FILE_SIZE_BYTES"
 EXEC_LANGUAGES = ("python", "javascript", "typescript", "c", "cpp")
 SOURCE_TOKENS = re.compile(
     r"""//[^\r\n]*|/\*[\s\S]*?\*/|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|`(?:\\[\s\S]|[^`\\])*`"""
@@ -705,7 +706,25 @@ def send(protocol_fd: int, reply: dict[str, Any], *, child: bool = False) -> Non
         data = data[written:]
 
 
+def apply_file_size_limit() -> None:
+    """Cap the size of every file this process and its children write, before any request.
+
+    The container's own limit is higher so that package installs can write large libraries.
+    Soft and hard are both set, so step code cannot raise the limit again.
+    """
+    value = os.environ.get(FILE_SIZE_ENV, "")
+    if not value.isascii() or not value.isdigit() or int(value) < 1:
+        raise SystemExit(f"{FILE_SIZE_ENV} must be a positive number of bytes")
+    try:
+        import resource
+    except ImportError:
+        return  # Not POSIX: only the local unit tests run here, never the sandbox container.
+    limit = int(value)
+    resource.setrlimit(resource.RLIMIT_FSIZE, (limit, limit))
+
+
 def main() -> None:
+    apply_file_size_limit()
     protocol_fd = os.dup(1)
     os.set_inheritable(protocol_fd, False)
     flush_quietly(sys.stdout)

@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     sandbox_memory: str = "2g"
     sandbox_tmpfs_mb: int = Field(default=512, ge=1)
     sandbox_file_size_mb: int = Field(default=256, ge=1)
+    sandbox_install_file_size_mb: int = Field(default=1024, ge=1)
     sandbox_cpus: float = 2.0
     sandbox_pids_limit: int = 256
     sandbox_max_package_mb: int = Field(default=400, ge=1)
