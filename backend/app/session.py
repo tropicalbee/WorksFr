@@ -255,15 +255,23 @@ class CheckSession:
         self._require_latest(step)
         names = step.bound_names()
         step.accept(attempt)
+        unverified = step.is_python and attempt.verdict == PatchVerdict.FIXED_UNVERIFIED
         if step.is_python:
             bound = step.bound_names()
             for name in bound:
                 self._replaced.pop(name, None)
-            removed = tuple(sorted(names - bound))
+            # An unverified patch stopped at an environment limit, so what it was meant to bind
+            # was never bound. Later steps then depend on a step that couldn't be verified.
+            removed = () if unverified else tuple(sorted(names - bound))
             replacement = ReplacedBindings(step.idx, removed, attempt.patched_code)
             for name in removed:
                 self._replaced[name] = replacement
         self._ledger[-1] = (step.idx, step.block.kind, attempt.patched_code)
+        if unverified:
+            for name in names:
+                self._unbound[name] = step.idx
+            self._unverified_sources.add(step.idx)
+            return
         for name in names:
             if self._unbound.get(name) == step.idx:
                 self._unbound.pop(name)

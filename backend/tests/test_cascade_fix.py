@@ -153,3 +153,95 @@ def test_attribute_error_identifies_the_base_name(code: str, attribute: str, lab
         assert dependent.label == label
         if label == Label.CANT_VERIFY:
             assert dependent.reason == "depends on step 1, whose fix replaced boston"
+
+
+def _boston_load_step() -> Step:
+    html = Path(__file__).parent / "fixtures/sklearn_boston.html"
+    blocks = build_blocks(parse_html_blocks(html.read_bytes()))
+    block = next(block for block in blocks if "load_boston()" in (block.runnable_code or ""))
+    block.idx = 1
+    return Step(block)
+
+
+def _accept_patch(session: CheckSession, original: Step, code: str) -> PatchVerdict:
+    result, decision, verdict = session.try_patch(original, code, 1)
+    session.accept(
+        original,
+        RepairAttempt(
+            attempt=1,
+            patched_code=code,
+            explanation="Swap data",
+            result=result,
+            decision=decision,
+            verdict=verdict,
+        ),
+    )
+    return verdict
+
+
+class _LoadSandbox(FakeSandbox):
+    """Step 1 fails on the old API. Its patch stops at a network error or runs fine."""
+
+    def __init__(self, patch_stops_at_network: bool) -> None:
+        super().__init__()
+        self.patch_stops_at_network = patch_stops_at_network
+
+    def restart(self, replay: list) -> None:
+        pass
+
+    def exec(self, step_id: str, code: str, *, lang: str = "python") -> ExecResult:
+        error = None
+        if step_id == "s1":
+            error = ErrorInfo(type="ImportError", message="load_boston was removed")
+        elif step_id == "s1-a1" and self.patch_stops_at_network:
+            error = ErrorInfo(
+                type="URLError",
+                message="<urlopen error [Errno -3] Temporary failure in name resolution>",
+                traceback='  File "<step-s1-a1>", line 1, in <module>\n'
+                '  File "/usr/lib/python3.12/urllib/request.py", line 1, in urlopen',
+            )
+        elif step_id in ("s2", "s3"):
+            name = "X" if step_id == "s2" else "boston"
+            error = ErrorInfo(type="NameError", message=f"name '{name}' is not defined")
+        return ExecResult(id=step_id, status="error" if error else "ok", error=error)
+
+
+def test_unverified_fix_keeps_names_unbound_and_skips_repair() -> None:
+    class Proposer:
+        calls = 0
+
+        def propose(self, messages: list[dict[str, str]]):
+            self.calls += 1
+            raise AssertionError("dependent steps must not be repaired")
+
+    settings = Settings(_env_file=None, providers=[])
+    with (
+        CheckSession(_LoadSandbox(True), settings) as session,
+        httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(404))) as client,
+    ):
+        session.start([])
+        original = _boston_load_step()
+        assert session.run(original).label == Label.BROKEN
+        verdict = _accept_patch(session, original, "boston = fetch_california_housing()")
+        assert verdict == PatchVerdict.FIXED_UNVERIFIED
+        proposer = Proposer()
+        context = RepairContext(None, PATCH, {}, [], settings, client, Cache())
+        for idx, code in ((2, "print(X)"), (3, "print(boston)")):
+            dependent = step(idx, code)
+            decision = session.run(dependent)
+            assert decision.label == Label.CANT_VERIFY
+            assert decision.reason.startswith("depends on step 2")
+            assert "couldn't be verified" in decision.reason
+            repair_step(session, dependent, context, proposer)
+            assert dependent.to_report().label == Label.CANT_VERIFY
+        assert proposer.calls == 0
+
+
+def test_verified_fix_still_clears_names() -> None:
+    with CheckSession(_LoadSandbox(False), Settings(_env_file=None)) as session:
+        session.start([])
+        original = _boston_load_step()
+        session.run(original)
+        assert _accept_patch(session, original, PATCH) == PatchVerdict.FIXED
+        assert session.run(step(2, "print(X)")).reason == "depends on step 2, whose fix replaced X"
+        assert session.run(step(4, "print(features)")).label == Label.WORKS
