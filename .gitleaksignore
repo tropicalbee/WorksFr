@@ -1,0 +1,4 @@
+# Fake test values and a public reCAPTCHA site key in a saved page; checked 2026-11-28.
+c5333a0744c3c323637679c6ce2474985f935fa6:backend/tests/test_reader.py:generic-api-key:15
+c5333a0744c3c323637679c6ce2474985f935fa6:backend/tests/test_video.py:generic-api-key:542
+50dcd8b694bda1351b7e43dd826164d89e7b1d14:backend/tests/fixtures/pandas_append.html:generic-api-key:146
